@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Banana Quest — Play & Win</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- ========== LOGIN / SIGNUP SCREEN ========== -->
+    <section id="screen-login" class="screen active">
+      <div class="screen-bg"></div>
+      <div class="screen-content login-content">
+        <div class="logo">
+          <span class="logo-icon">🍌</span>
+          <h1>Banana Quest</h1>
+          <p class="tagline">Play smart. Score big.</p>
+        </div>
+        <!-- LOGIN FORM -->
+        <form id="form-login" class="card form-card auth-form">
+          <h2>Welcome back</h2>
+          <div class="input-group">
+            <label for="login-username">Username or email</label>
+            <input type="text" id="login-username" placeholder="Enter your username" required autocomplete="username">
+          </div>
+          <div class="input-group">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" placeholder="Enter your password" required autocomplete="current-password">
+          </div>
+          <p class="form-error" id="login-error" aria-live="polite"></p>
+          <button type="submit" class="btn btn-primary btn-lg">
+            <span>Sign in</span>
+            <span class="btn-icon">→</span>
+          </button>
+          <p class="form-switch">
+            New player? <button type="button" class="link-btn" id="btn-show-signup">Create an account</button>
+          </p>
+        </form>
+        <!-- SIGNUP FORM -->
+        <form id="form-signup" class="card form-card auth-form hidden">
+          <h2>Create account</h2>
+          <div class="input-group">
+            <label for="signup-username">Username</label>
+            <input type="text" id="signup-username" placeholder="Choose a username" required autocomplete="username" minlength="2">
+          </div>
+          <div class="input-group">
+            <label for="signup-email">Email</label>
+            <input type="email" id="signup-email" placeholder="your@email.com" required autocomplete="email">
+          </div>
+          <div class="input-group">
+            <label for="signup-password">Password</label>
+            <input type="password" id="signup-password" placeholder="At least 6 characters" required autocomplete="new-password" minlength="6">
+          </div>
+          <div class="input-group">
+            <label for="signup-confirm">Confirm password</label>
+            <input type="password" id="signup-confirm" placeholder="Confirm your password" required autocomplete="new-password">
+          </div>
+          <p class="form-error" id="signup-error" aria-live="polite"></p>
+          <button type="submit" class="btn btn-primary btn-lg">
+            <span>Sign up</span>
+            <span class="btn-icon">→</span>
+          </button>
+          <p class="form-switch">
+            Already have an account? <button type="button" class="link-btn" id="btn-show-login">Sign in</button>
+          </p>
+        </form>
+      </div>
+    </section>
+
+    <!-- ========== PROFILE SCREEN ========== -->
+    <section id="screen-profile" class="screen">
+      <div class="screen-bg profile-bg"></div>
+      <header class="app-header">
+        <span class="logo-small">🍌 Banana Quest</span>
+        <nav>
+          <button type="button" class="nav-btn" data-screen="home">Home</button>
+          <button type="button" class="nav-btn active" data-screen="profile">Profile</button>
+          <button type="button" class="nav-btn" id="btn-logout">Log out</button>
+        </nav>
+      </header>
+      <div class="screen-content profile-content">
+        <div class="profile-header">
+          <div class="profile-header-inner">
+            <div class="profile-avatar-wrap">
+              <div class="profile-avatar" id="profile-avatar">?</div>
+              <span class="profile-level-badge" id="profile-level">1</span>
+            </div>
+            <div class="profile-identity">
+              <h1 id="profile-name">Player</h1>
+              <p class="profile-email" id="profile-email">player@example.com</p>
+              <div class="profile-xp-wrap">
+                <div class="profile-xp-bar">
+                  <div class="profile-xp-fill" id="profile-xp-fill"></div>
+                </div>
+                <span class="profile-xp-text" id="profile-xp-text">0 / 100 XP</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="profile-stats-row">
+          <div class="stat">
+            <span class="stat-value" id="profile-total-games">0</span>
+            <span class="stat-label">Games played</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value" id="profile-high-score">0</span>
+            <span class="stat-label">High score</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value" id="profile-wins">0</span>
+            <span class="stat-label">Wins</span>
+          </div>
+          <div class="stat stat-winrate">
+            <span class="stat-value" id="profile-winrate">0%</span>
+            <span class="stat-label">Win rate</span>
+          </div>
+        </div>
+        <div class="profile-achievements-wrap">
+          <div class="profile-achievements-head">
+            <h2 class="profile-achievements-title">Achievements</h2>
+            <span class="profile-achievements-count" id="profile-achievements-count">0 / 15</span>
+          </div>
+          <div class="achievements-grid" id="profile-achievements">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary btn-edit-profile" id="btn-edit-profile">Edit profile</button>
+      </div>
+    </section>
+
+    <!-- ========== GAME HOME SCREEN ========== -->
+    <section id="screen-home" class="screen">
+      <div class="screen-bg"></div>
+      <header class="app-header">
+        <span class="logo-small">🍌 Banana Quest</span>
+        <nav>
+          <button type="button" class="nav-btn active" data-screen="home">Home</button>
+          <button type="button" class="nav-btn" data-screen="profile">Profile</button>
+          <button type="button" class="nav-btn" id="btn-logout-2">Log out</button>
+        </nav>
+      </header>
+      <div class="screen-content home-content">
+        <div class="welcome-banner">
+          <h1>Hey, <span id="home-username">Player</span>!</h1>
+          <p>Choose difficulty and start your next round.</p>
+        </div>
+        <div class="difficulty-grid">
+          <button type="button" class="difficulty-card" data-difficulty="easy">
+            <span class="difficulty-icon">🌱</span>
+            <h3>Easy</h3>
+            <p>Warm up — more time, gentle challenge</p>
+            <span class="difficulty-time">90s per round</span>
+          </button>
+          <button type="button" class="difficulty-card" data-difficulty="medium">
+            <span class="difficulty-icon">⚡</span>
+            <h3>Medium</h3>
+            <p>Balanced — standard time and difficulty</p>
+            <span class="difficulty-time">60s per round</span>
+          </button>
+          <button type="button" class="difficulty-card" data-difficulty="hard">
+            <span class="difficulty-icon">🔥</span>
+            <h3>Hard</h3>
+            <p>Pro mode — less time, tough questions</p>
+            <span class="difficulty-time">30s per round</span>
+          </button>
+        </div>
+        <div class="home-stats">
+          <div class="mini-stat">
+            <span class="mini-stat-value" id="home-score">0</span>
+            <span>Current score</span>
+          </div>
+          <div class="mini-stat">
+            <span class="mini-stat-value" id="home-best">0</span>
+            <span>Best score</span>
+          </div>
+        </div>
+        <div class="leaderboard-section card">
+          <h3 class="leaderboard-title">🏆 Leaderboard</h3>
+          <div class="leaderboard-list" id="leaderboard-list">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+        <button type="button" class="btn btn-primary btn-lg btn-start" id="btn-start-game" disabled>
+          Select a difficulty to start
+        </button>
+      </div>
+    </section>
+
+    <!-- ========== GAME PLAY SCREEN ========== -->
+    <section id="screen-play" class="screen">
+      <div class="screen-bg game-bg"></div>
+      <header class="game-header">
+        <div class="game-header-left">
+          <span class="game-logo">🍌</span>
+          <span class="round-badge">Round <span id="round-number">1</span> of <span id="round-total">5</span></span>
+        </div>
+        <div class="game-header-center">
+          <div class="timer-wrap">
+            <div class="timer-ring">
+              <svg viewBox="0 0 60 60">
+                <circle class="timer-bg" cx="30" cy="30" r="26"/>
+                <circle class="timer-progress" id="timer-progress" cx="30" cy="30" r="26"/>
+              </svg>
+            </div>
+            <span class="timer-text" id="timer-display">60</span>
+          </div>
+        </div>
+        <div class="game-header-right">
+          <span class="score-badge">Score: <strong id="play-score">0</strong></span>
+          <span class="difficulty-badge" id="play-difficulty">Medium</span>
+        </div>
+      </header>
+      <div class="screen-content play-content">
+        <div class="question-card card">
+          <h2 class="question-label">Question</h2>
+          <p class="question-text" id="question-text">Loading your challenge...</p>
+          <div class="answers" id="answers-container">
+            <!-- Answers injected by JS -->
+          </div>
+          <div class="submit-row">
+            <button type="button" class="btn btn-primary btn-submit" id="btn-submit-answer" disabled>
+              Submit answer
+            </button>
+          </div>
+        </div>
+        <div class="feedback-toast" id="feedback-toast" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <!-- ========== GAME END SCREEN ========== -->
+    <section id="screen-end" class="screen">
+      <div class="screen-bg"></div>
+      <div class="screen-content end-content">
+        <div class="card end-card">
+          <div class="end-icon" id="end-icon">🏆</div>
+          <h1 id="end-title">Game over!</h1>
+          <p class="end-message" id="end-message">You did great. Here’s how you did.</p>
+          <div class="end-stats">
+            <div class="end-stat">
+              <span class="end-stat-value" id="end-score">0</span>
+              <span class="end-stat-label">Final score</span>
+            </div>
+            <div class="end-stat">
+              <span class="end-stat-value" id="end-correct">0</span>
+              <span class="end-stat-label">Correct</span>
+            </div>
+            <div class="end-stat">
+              <span class="end-stat-value" id="end-rounds">0</span>
+              <span class="end-stat-label">Rounds</span>
+            </div>
+          </div>
+          <div class="end-actions">
+            <button type="button" class="btn btn-secondary" id="btn-play-again">Play again</button>
+            <button type="button" class="btn btn-primary" id="btn-back-home">Back to home</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
