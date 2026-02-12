@@ -7,7 +7,7 @@
   'use strict';
 
   const STORAGE_KEY_USER = 'bananaQuestUser';
-  const STORAGE_KEY_USERS = 'bananaQuestUsers';
+
 
   // ========== CONFIG ==========
   const ROUNDS_PER_GAME = 5;
@@ -16,6 +16,66 @@
   const TIME_HARD = 30;
   const POINTS_CORRECT = 100;
   const POINTS_BONUS_PER_SECOND = 2; // bonus for fast answer
+
+  // ========== API HELPERS (MongoDB-backed storage) ==========
+  async function apiSignup(username, email, password) {
+    const res = await fetch('/api/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password })
+    });
+    const data = await res.json().catch(function () { return {}; });
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to sign up.');
+    }
+    return data;
+  }
+
+  async function apiLogin(usernameOrEmail, password) {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usernameOrEmail: usernameOrEmail, password: password })
+    });
+    const data = await res.json().catch(function () { return {}; });
+    if (!res.ok) {
+      throw new Error(data.error || 'Invalid username or password.');
+    }
+    return data;
+  }
+
+  async function apiGetUser(username) {
+    const res = await fetch('/api/users/' + encodeURIComponent(username));
+    if (res.status === 404) return null;
+    const data = await res.json().catch(function () { return null; });
+    if (!res.ok) {
+      throw new Error((data && data.error) || 'Failed to load user.');
+    }
+    return data;
+  }
+
+  async function apiSaveUser(userObj) {
+    if (!userObj || !userObj.username) return;
+    const res = await fetch('/api/users/' + encodeURIComponent(userObj.username), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userObj)
+    });
+    const data = await res.json().catch(function () { return {}; });
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to save user.');
+    }
+    return data;
+  }
+
+  async function apiGetLeaderboard() {
+    const res = await fetch('/api/leaderboard');
+    const data = await res.json().catch(function () { return []; });
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load leaderboard.');
+    }
+    return data;
+  }
 
   const DIFFICULTY_CONFIG = {
     easy: { label: 'Easy', time: TIME_EASY, class: 'easy' },
@@ -162,48 +222,17 @@
     showAuthForm('login');
   }
 
-  // ========== STORAGE (USERS REGISTRY & LEADERBOARD) ==========
-  function getUsers() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY_USERS);
-      return raw ? JSON.parse(raw) : {};
-    } catch (e) {
-      return {};
-    }
-  }
-
-  function saveUsers(users) {
-    try {
-      localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
-    } catch (e) {}
-  }
-
-  function getUserByUsername(username) {
-    var users = getUsers();
-    return users[username] || null;
-  }
-
-  function getUserByEmail(email) {
-    var users = getUsers();
-    for (var u in users) {
-      if (users[u].email && users[u].email.toLowerCase() === email.toLowerCase()) return users[u];
-    }
-    return null;
-  }
-
+  // ========== STORAGE (PERSIST USER TO MONGODB) ==========
   function saveCurrentUserToRegistry() {
     if (!user.username) return;
-    var users = getUsers();
-    var u = users[user.username] || {};
-    u.username = user.username;
-    u.email = user.email;
-    u.highScore = user.highScore;
-    u.totalGames = user.totalGames;
-    u.wins = user.wins;
-    u.achievements = user.achievements || [];
-    if (u.password !== undefined) u.password = u.password; // keep existing
-    users[user.username] = u;
-    saveUsers(users);
+    // Persist latest stats and achievements to MongoDB
+    apiSaveUser(user).catch(function (err) {
+      console.error('Failed to save user to database', err);
+    });
+    // Remember who is logged in on this device
+    try {
+      localStorage.setItem(STORAGE_KEY_USER, user.username);
+    } catch (e) {}
   }
 
   // ========== AUTH TOGGLE ==========
@@ -215,7 +244,7 @@
   }
 
   // ========== SIGNUP ==========
-  function handleSignupSubmit(e) {
+  async function handleSignupSubmit(e) {
     e.preventDefault();
     if (elements.signupError) elements.signupError.textContent = '';
     var username = (elements.signupUsername.value || '').trim().toLowerCase();
@@ -235,90 +264,58 @@
       if (elements.signupError) elements.signupError.textContent = 'Passwords do not match.';
       return;
     }
-    if (getUserByUsername(username)) {
-      if (elements.signupError) elements.signupError.textContent = 'Username is already taken.';
-      return;
-    }
-
-    var users = getUsers();
-    users[username] = {
-      username: username,
-      email: email,
-      password: password,
-      highScore: 0,
-      totalGames: 0,
-      wins: 0,
-      achievements: []
-    };
-    saveUsers(users);
-
-    user = {
-      username: username,
-      email: email,
-      totalGames: 0,
-      highScore: 0,
-      wins: 0,
-      achievements: []
-    };
     try {
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
-    } catch (err) {}
-
-    updateProfileUI();
-    updateHomeUI();
-    renderLeaderboard();
-    showScreen('home');
-    bindNavButtons();
+      var created = await apiSignup(username, email, password);
+      user = {
+        username: created.username,
+        email: created.email,
+        totalGames: created.totalGames || 0,
+        highScore: created.highScore || 0,
+        wins: created.wins || 0,
+        achievements: created.achievements || []
+      };
+      saveCurrentUserToRegistry();
+      updateProfileUI();
+      updateHomeUI();
+      renderLeaderboard();
+      showScreen('home');
+      bindNavButtons();
+    } catch (err) {
+      if (elements.signupError) {
+        elements.signupError.textContent = err.message || 'Failed to sign up.';
+      }
+    }
   }
 
   // ========== LOGIN ==========
-  function handleLoginSubmit(e) {
+  async function handleLoginSubmit(e) {
     e.preventDefault();
     var usernameOrEmail = (elements.loginUsername.value || '').trim();
     var password = elements.loginPassword.value;
     if (!usernameOrEmail) return;
-
-    var found = getUserByUsername(usernameOrEmail) || (usernameOrEmail.indexOf('@') !== -1 ? getUserByEmail(usernameOrEmail) : null);
-    if (!found) {
-      // Demo: create guest user if not found
-      var guestName = usernameOrEmail.indexOf('@') !== -1 ? usernameOrEmail.split('@')[0] : usernameOrEmail;
-      var users = getUsers();
-      if (!users[guestName]) {
-        users[guestName] = {
-          username: guestName,
-          email: usernameOrEmail.indexOf('@') !== -1 ? usernameOrEmail : guestName + '@bananaquest.game',
-          password: password,
-          highScore: 0,
-          totalGames: 0,
-          wins: 0,
-          achievements: []
-        };
-        saveUsers(users);
-      }
-      found = users[guestName];
-    } else if (found.password !== password) {
-      if (elements.loginError) elements.loginError.textContent = 'Invalid username or password.';
-      return;
-    }
-    if (elements.loginError) elements.loginError.textContent = '';
-
-    user = {
-      username: found.username,
-      email: found.email,
-      totalGames: found.totalGames || 0,
-      highScore: found.highScore || 0,
-      wins: found.wins || 0,
-      achievements: found.achievements || []
-    };
     try {
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
-    } catch (err) {}
+      var loggedIn = await apiLogin(usernameOrEmail, password);
+      if (elements.loginError) elements.loginError.textContent = '';
 
-    updateProfileUI();
-    updateHomeUI();
-    renderLeaderboard();
-    showScreen('home');
-    bindNavButtons();
+      user = {
+        username: loggedIn.username,
+        email: loggedIn.email,
+        totalGames: loggedIn.totalGames || 0,
+        highScore: loggedIn.highScore || 0,
+        wins: loggedIn.wins || 0,
+        achievements: loggedIn.achievements || []
+      };
+      saveCurrentUserToRegistry();
+      updateProfileUI();
+      updateHomeUI();
+      renderLeaderboard();
+      showScreen('home');
+      bindNavButtons();
+    } catch (err) {
+      if (elements.loginError) {
+        elements.loginError.textContent = err.message || 'Invalid username or password.';
+      }
+    }
   }
 
   function getProfileLevelAndXp() {
@@ -422,29 +419,28 @@
   // ========== LEADERBOARD ==========
   function renderLeaderboard() {
     if (!elements.leaderboardList) return;
-    var users = getUsers();
-    var arr = [];
-    for (var key in users) {
-      var u = users[key];
-      arr.push({ username: u.username, highScore: u.highScore || 0 });
-    }
-    arr.sort(function (a, b) { return b.highScore - a.highScore; });
-    var top = arr.slice(0, 10);
-    if (top.length === 0) {
-      elements.leaderboardList.innerHTML = '<p class="leaderboard-empty">No scores yet. Play to climb the board!</p>';
-      return;
-    }
-    elements.leaderboardList.innerHTML = top.map(function (row, i) {
-      var rank = i + 1;
-      var isYou = user.username && row.username === user.username;
-      return (
-        '<div class="leaderboard-row rank-' + rank + (isYou ? ' you' : '') + '">' +
-          '<span class="leaderboard-rank">#' + rank + '</span>' +
-          '<span class="leaderboard-name">' + escapeHtml(row.username) + (isYou ? ' (you)' : '') + '</span>' +
-          '<span class="leaderboard-score">' + row.highScore + '</span>' +
-        '</div>'
-      );
-    }).join('');
+    apiGetLeaderboard()
+      .then(function (top) {
+        if (!top || top.length === 0) {
+          elements.leaderboardList.innerHTML = '<p class="leaderboard-empty">No scores yet. Play to climb the board!</p>';
+          return;
+        }
+        elements.leaderboardList.innerHTML = top.map(function (row, i) {
+          var rank = i + 1;
+          var isYou = user.username && row.username === user.username;
+          return (
+            '<div class="leaderboard-row rank-' + rank + (isYou ? ' you' : '') + '">' +
+              '<span class="leaderboard-rank">#' + rank + '</span>' +
+              '<span class="leaderboard-name">' + escapeHtml(row.username) + (isYou ? ' (you)' : '') + '</span>' +
+              '<span class="leaderboard-score">' + row.highScore + '</span>' +
+            '</div>'
+          );
+        }).join('');
+      })
+      .catch(function (err) {
+        console.error('Failed to load leaderboard', err);
+        elements.leaderboardList.innerHTML = '<p class="leaderboard-empty">Unable to load leaderboard.</p>';
+      });
   }
 
   // ========== DIFFICULTY & START GAME ==========
@@ -643,9 +639,6 @@
     if (gameState.correctCount === gameState.totalRounds) user.wins += 1;
     var newAchievements = checkAchievements();
     saveCurrentUserToRegistry();
-    try {
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
-    } catch (e) {}
 
     elements.endScore.textContent = gameState.score;
     elements.endCorrect.textContent = gameState.correctCount;
@@ -678,27 +671,26 @@
   // ========== INIT ==========
   function loadStoredUser() {
     try {
-      var stored = localStorage.getItem(STORAGE_KEY_USER);
-      if (stored) {
-        user = JSON.parse(stored);
-        if (!user.achievements) user.achievements = [];
-        var users = getUsers();
-        if (!users[user.username]) {
-          users[user.username] = {
-            username: user.username,
-            email: user.email,
-            password: '',
-            highScore: user.highScore,
-            totalGames: user.totalGames,
-            wins: user.wins,
-            achievements: user.achievements
+      var storedName = localStorage.getItem(STORAGE_KEY_USER);
+      if (!storedName) return;
+      apiGetUser(storedName)
+        .then(function (remoteUser) {
+          if (!remoteUser) return;
+          user = {
+            username: remoteUser.username,
+            email: remoteUser.email,
+            totalGames: remoteUser.totalGames || 0,
+            highScore: remoteUser.highScore || 0,
+            wins: remoteUser.wins || 0,
+            achievements: remoteUser.achievements || []
           };
-          saveUsers(users);
-        }
-        updateProfileUI();
-        updateHomeUI();
-        renderLeaderboard();
-      }
+          updateProfileUI();
+          updateHomeUI();
+          renderLeaderboard();
+        })
+        .catch(function (err) {
+          console.error('Failed to load stored user from database', err);
+        });
     } catch (e) {}
   }
 
