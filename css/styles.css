@@ -255,6 +255,10 @@ body::-webkit-scrollbar {
   text-align: center;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .auth-form.hidden {
   display: none !important;
 }
@@ -353,6 +357,31 @@ body::-webkit-scrollbar {
 
 .btn:hover:not(:disabled) .btn-icon {
   transform: translateX(4px);
+}
+
+/* Button loading state (email / auth actions) */
+.btn-loader {
+  display: none;
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 2px solid rgba(13, 15, 20, 0.25);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: btn-spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+.btn.loading .btn-loader {
+  display: inline-block;
+}
+.btn.loading .btn-text,
+.btn.loading .btn-icon {
+  display: none;
+}
+.btn.loading:disabled {
+  cursor: wait;
+}
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ========== PROFILE (FULL-PAGE GAME STYLE) ========== */

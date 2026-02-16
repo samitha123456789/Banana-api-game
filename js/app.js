@@ -17,27 +17,73 @@
   const POINTS_CORRECT = 100;
   const POINTS_BONUS_PER_SECOND = 2; // bonus for fast answer
 
-  // ========== API HELPERS (MongoDB-backed storage) ==========
-  async function apiSignup(username, email, password) {
-    const res = await fetch('/api/signup', {
+  // ========== API HELPERS (cookie-based auth; credentials: 'include' sends cookies) ==========
+  function jsonHeaders() {
+    return { 'Content-Type': 'application/json' };
+  }
+
+  async function apiRefresh() {
+    var res = await fetch('/api/refresh', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      headers: jsonHeaders(),
+      body: JSON.stringify({})
+    });
+    var data = await res.json().catch(function () { return {}; });
+    if (!res.ok) {
+      throw new Error(data.error || 'Session expired.');
+    }
+    return data;
+  }
+
+  async function apiMe() {
+    var res = await fetch('/api/me', { credentials: 'include' });
+    if (res.status === 401 || res.status === 404) return null;
+    var data = await res.json().catch(function () { return null; });
+    if (!res.ok) throw new Error((data && data.error) || 'Failed to load session.');
+    return data;
+  }
+
+  async function apiLogout() {
+    await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+  }
+
+  async function apiSignupSendOtp(username, email, password) {
+    var res = await fetch('/api/signup/send-otp', {
+      method: 'POST',
+      credentials: 'include',
+      headers: jsonHeaders(),
       body: JSON.stringify({ username, email, password })
     });
-    const data = await res.json().catch(function () { return {}; });
+    var data = await res.json().catch(function () { return {}; });
     if (!res.ok) {
-      throw new Error(data.error || 'Failed to sign up.');
+      throw new Error(data.error || 'Failed to send OTP.');
+    }
+    return data;
+  }
+
+  async function apiSignupVerifyOtp(username, email, otp) {
+    var res = await fetch('/api/signup/verify-otp', {
+      method: 'POST',
+      credentials: 'include',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ username, email, otp })
+    });
+    var data = await res.json().catch(function () { return {}; });
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to verify OTP.');
     }
     return data;
   }
 
   async function apiLogin(usernameOrEmail, password) {
-    const res = await fetch('/api/login', {
+    var res = await fetch('/api/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      headers: jsonHeaders(),
       body: JSON.stringify({ usernameOrEmail: usernameOrEmail, password: password })
     });
-    const data = await res.json().catch(function () { return {}; });
+    var data = await res.json().catch(function () { return {}; });
     if (!res.ok) {
       throw new Error(data.error || 'Invalid username or password.');
     }
@@ -45,9 +91,22 @@
   }
 
   async function apiGetUser(username) {
-    const res = await fetch('/api/users/' + encodeURIComponent(username));
+    var url = '/api/users/' + encodeURIComponent(username);
+    var res = await fetch(url, { credentials: 'include', headers: jsonHeaders() });
     if (res.status === 404) return null;
-    const data = await res.json().catch(function () { return null; });
+    if (res.status === 401) {
+      try {
+        var refreshed = await apiRefresh();
+        if (refreshed) Object.assign(user, refreshed);
+        try { localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user)); } catch (e) {}
+        res = await fetch(url, { credentials: 'include', headers: jsonHeaders() });
+      } catch (refreshErr) {
+        user = { username: '', email: '', totalGames: 0, highScore: 0, wins: 0, achievements: [] };
+        try { localStorage.removeItem(STORAGE_KEY_USER); } catch (e) {}
+        throw new Error('Session expired. Please sign in again.');
+      }
+    }
+    var data = await res.json().catch(function () { return null; });
     if (!res.ok) {
       throw new Error((data && data.error) || 'Failed to load user.');
     }
@@ -56,12 +115,22 @@
 
   async function apiSaveUser(userObj) {
     if (!userObj || !userObj.username) return;
-    const res = await fetch('/api/users/' + encodeURIComponent(userObj.username), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(userObj)
-    });
-    const data = await res.json().catch(function () { return {}; });
+    var url = '/api/users/' + encodeURIComponent(userObj.username);
+    var opts = { method: 'PUT', credentials: 'include', headers: jsonHeaders(), body: JSON.stringify(userObj) };
+    var res = await fetch(url, opts);
+    if (res.status === 401) {
+      try {
+        var refreshed = await apiRefresh();
+        if (refreshed) Object.assign(user, refreshed);
+        try { localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user)); } catch (e) {}
+        res = await fetch(url, opts);
+      } catch (refreshErr) {
+        user = { username: '', email: '', totalGames: 0, highScore: 0, wins: 0, achievements: [] };
+        try { localStorage.removeItem(STORAGE_KEY_USER); } catch (e) {}
+        throw new Error('Session expired. Please sign in again.');
+      }
+    }
+    var data = await res.json().catch(function () { return {}; });
     if (!res.ok) {
       throw new Error(data.error || 'Failed to save user.');
     }
@@ -69,8 +138,8 @@
   }
 
   async function apiGetLeaderboard() {
-    const res = await fetch('/api/leaderboard');
-    const data = await res.json().catch(function () { return []; });
+    var res = await fetch('/api/leaderboard', { credentials: 'include' });
+    var data = await res.json().catch(function () { return []; });
     if (!res.ok) {
       throw new Error(data.error || 'Failed to load leaderboard.');
     }
@@ -154,7 +223,14 @@
     signupPassword: document.getElementById('signup-password'),
     signupConfirm: document.getElementById('signup-confirm'),
     signupError: document.getElementById('signup-error'),
+    signupStep1: document.getElementById('signup-step1'),
+    signupStep2: document.getElementById('signup-step2'),
+    signupOtp: document.getElementById('signup-otp'),
+    signupOtpError: document.getElementById('signup-otp-error'),
     loginError: document.getElementById('login-error'),
+    btnLoginSubmit: document.getElementById('btn-login-submit'),
+    btnSignupSendOtp: document.getElementById('btn-signup-send-otp'),
+    btnSignupVerify: document.getElementById('btn-signup-verify'),
     profileName: document.getElementById('profile-name'),
     profileEmail: document.getElementById('profile-email'),
     profileAvatar: document.getElementById('profile-avatar'),
@@ -216,22 +292,30 @@
     document.getElementById('btn-logout-2').addEventListener('click', handleLogout);
   }
 
-  function handleLogout() {
+  async function handleLogout() {
+    apiLogout().catch(function () {});
+    user = { username: '', email: '', totalGames: 0, highScore: 0, wins: 0, achievements: [] };
+    try { localStorage.removeItem(STORAGE_KEY_USER); } catch (e) {}
     showScreen('login');
     elements.formLogin.reset();
     showAuthForm('login');
   }
 
-  // ========== STORAGE (PERSIST USER TO MONGODB) ==========
+  // ========== STORAGE (persist profile to MongoDB + localStorage; auth via cookies) ==========
   function saveCurrentUserToRegistry() {
     if (!user.username) return;
-    // Persist latest stats and achievements to MongoDB
     apiSaveUser(user).catch(function (err) {
       console.error('Failed to save user to database', err);
     });
-    // Remember who is logged in on this device
     try {
-      localStorage.setItem(STORAGE_KEY_USER, user.username);
+      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify({
+        username: user.username,
+        email: user.email,
+        highScore: user.highScore,
+        totalGames: user.totalGames,
+        wins: user.wins,
+        achievements: user.achievements || []
+      }));
     } catch (e) {}
   }
 
@@ -241,12 +325,61 @@
     elements.formLogin.classList.toggle('hidden', !isLogin);
     elements.formSignup.classList.toggle('hidden', isLogin);
     if (elements.signupError) elements.signupError.textContent = '';
+    if (elements.signupOtpError) elements.signupOtpError.textContent = '';
+    if (elements.signupStep1) elements.signupStep1.classList.remove('hidden');
+    if (elements.signupStep2) elements.signupStep2.classList.add('hidden');
   }
 
-  // ========== SIGNUP ==========
+  function setButtonLoading(btn, loading) {
+    if (!btn) return;
+    btn.disabled = loading;
+    btn.classList.toggle('loading', loading);
+  }
+
+  // ========== SIGNUP (step 1: send OTP → step 2: verify OTP) ==========
   async function handleSignupSubmit(e) {
     e.preventDefault();
+    if (elements.signupOtpError) elements.signupOtpError.textContent = '';
     if (elements.signupError) elements.signupError.textContent = '';
+
+    if (elements.signupStep2 && !elements.signupStep2.classList.contains('hidden')) {
+      var username = (elements.signupUsername.value || '').trim().toLowerCase();
+      var email = (elements.signupEmail.value || '').trim();
+      var otp = (elements.signupOtp.value || '').trim();
+      if (!otp || otp.length !== 6) {
+        if (elements.signupOtpError) elements.signupOtpError.textContent = 'Enter the 6-digit code from your email.';
+        return;
+      }
+      setButtonLoading(elements.btnSignupVerify, true);
+      try {
+        var created = await apiSignupVerifyOtp(username, email, otp);
+        user = {
+          username: created.username,
+          email: created.email,
+          totalGames: created.totalGames || 0,
+          highScore: created.highScore || 0,
+          wins: created.wins || 0,
+          achievements: created.achievements || []
+        };
+        saveCurrentUserToRegistry();
+        updateProfileUI();
+        updateHomeUI();
+        renderLeaderboard();
+        showScreen('home');
+        bindNavButtons();
+        if (elements.signupStep1) elements.signupStep1.classList.remove('hidden');
+        if (elements.signupStep2) elements.signupStep2.classList.add('hidden');
+        if (elements.signupOtp) elements.signupOtp.value = '';
+      } catch (err) {
+        if (elements.signupOtpError) {
+          elements.signupOtpError.textContent = err.message || 'Invalid or expired OTP.';
+        }
+      } finally {
+        setButtonLoading(elements.btnSignupVerify, false);
+      }
+      return;
+    }
+
     var username = (elements.signupUsername.value || '').trim().toLowerCase();
     var email = (elements.signupEmail.value || '').trim();
     var password = elements.signupPassword.value;
@@ -254,6 +387,10 @@
 
     if (username.length < 2) {
       if (elements.signupError) elements.signupError.textContent = 'Username must be at least 2 characters.';
+      return;
+    }
+    if (!email) {
+      if (elements.signupError) elements.signupError.textContent = 'Email is required.';
       return;
     }
     if (password.length < 6) {
@@ -264,26 +401,20 @@
       if (elements.signupError) elements.signupError.textContent = 'Passwords do not match.';
       return;
     }
+    setButtonLoading(elements.btnSignupSendOtp, true);
     try {
-      var created = await apiSignup(username, email, password);
-      user = {
-        username: created.username,
-        email: created.email,
-        totalGames: created.totalGames || 0,
-        highScore: created.highScore || 0,
-        wins: created.wins || 0,
-        achievements: created.achievements || []
-      };
-      saveCurrentUserToRegistry();
-      updateProfileUI();
-      updateHomeUI();
-      renderLeaderboard();
-      showScreen('home');
-      bindNavButtons();
+      await apiSignupSendOtp(username, email, password);
+      if (elements.signupError) elements.signupError.textContent = '';
+      if (elements.signupStep1) elements.signupStep1.classList.add('hidden');
+      if (elements.signupStep2) elements.signupStep2.classList.remove('hidden');
+      if (elements.signupOtp) elements.signupOtp.value = '';
+      if (elements.signupOtpError) elements.signupOtpError.textContent = '';
     } catch (err) {
       if (elements.signupError) {
-        elements.signupError.textContent = err.message || 'Failed to sign up.';
+        elements.signupError.textContent = err.message || 'Failed to send OTP.';
       }
+    } finally {
+      setButtonLoading(elements.btnSignupSendOtp, false);
     }
   }
 
@@ -293,6 +424,7 @@
     var usernameOrEmail = (elements.loginUsername.value || '').trim();
     var password = elements.loginPassword.value;
     if (!usernameOrEmail) return;
+    setButtonLoading(elements.btnLoginSubmit, true);
     try {
       var loggedIn = await apiLogin(usernameOrEmail, password);
       if (elements.loginError) elements.loginError.textContent = '';
@@ -315,7 +447,19 @@
       if (elements.loginError) {
         elements.loginError.textContent = err.message || 'Invalid username or password.';
       }
+    } finally {
+      setButtonLoading(elements.btnLoginSubmit, false);
     }
+  }
+
+  function applyUserPayload(payload) {
+    if (!payload) return;
+    user.username = payload.username;
+    user.email = payload.email || '';
+    user.totalGames = payload.totalGames || 0;
+    user.highScore = payload.highScore || 0;
+    user.wins = payload.wins || 0;
+    user.achievements = Array.isArray(payload.achievements) ? payload.achievements : [];
   }
 
   function getProfileLevelAndXp() {
@@ -670,28 +814,29 @@
 
   // ========== INIT ==========
   function loadStoredUser() {
-    try {
-      var storedName = localStorage.getItem(STORAGE_KEY_USER);
-      if (!storedName) return;
-      apiGetUser(storedName)
-        .then(function (remoteUser) {
-          if (!remoteUser) return;
-          user = {
-            username: remoteUser.username,
-            email: remoteUser.email,
-            totalGames: remoteUser.totalGames || 0,
-            highScore: remoteUser.highScore || 0,
-            wins: remoteUser.wins || 0,
-            achievements: remoteUser.achievements || []
-          };
-          updateProfileUI();
-          updateHomeUI();
-          renderLeaderboard();
-        })
-        .catch(function (err) {
-          console.error('Failed to load stored user from database', err);
-        });
-    } catch (e) {}
+    apiMe()
+      .then(function (me) {
+        if (!me) return;
+        applyUserPayload(me);
+        try {
+          localStorage.setItem(STORAGE_KEY_USER, JSON.stringify({
+            username: user.username,
+            email: user.email,
+            highScore: user.highScore,
+            totalGames: user.totalGames,
+            wins: user.wins,
+            achievements: user.achievements || []
+          }));
+        } catch (e) {}
+        updateProfileUI();
+        updateHomeUI();
+        renderLeaderboard();
+      })
+      .catch(function (err) {
+        console.warn('Session restore:', err.message || err);
+        user = { username: '', email: '', totalGames: 0, highScore: 0, wins: 0, achievements: [] };
+        try { localStorage.removeItem(STORAGE_KEY_USER); } catch (e) {}
+      });
   }
 
   function init() {
