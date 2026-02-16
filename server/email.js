@@ -41,16 +41,16 @@ function getTransporter() {
 function buildGameOTPEmail(otp, type) {
   const isSignup = type === 'signup';
   const subject = isSignup
-    ? 'Your verification code – Banana Quest'
-    : 'Password reset code – Banana Quest';
+    ? 'Your verification code – Banana Challenge Arena'
+    : 'Password reset code – Banana Challenge Arena';
   const title = isSignup ? 'Verify your account' : 'Reset your password';
   const intro = isSignup
-    ? 'Use this code to complete your Banana Quest signup. Enter it in the app to create your account.'
-    : 'Use this code to reset your Banana Quest password. Enter it on the reset page with your new password.';
+    ? 'Use this code to complete your Banana Challenge Arena signup. Enter it in the app to create your account.'
+    : 'Use this code to reset your Banana Challenge Arena password. Enter it on the reset page with your new password.';
   const ctaLabel = isSignup ? 'Your verification code' : 'Your reset code';
 
   const text = [
-    `Banana Quest – ${title}`,
+    `Banana Challenge Arena – ${title}`,
     '',
     intro,
     '',
@@ -59,7 +59,7 @@ function buildGameOTPEmail(otp, type) {
     'This code expires in 10 minutes. Do not share it with anyone.',
     'If you did not request this, you can safely ignore this email.',
     '',
-    '— Banana Quest Team'
+    '— Banana Challenge Arena Team'
   ].join('\n');
 
   const html = `
@@ -78,7 +78,7 @@ function buildGameOTPEmail(otp, type) {
           <tr>
             <td style="padding:32px 32px 24px; text-align:center; border-bottom:1px solid rgba(230,184,0,0.15);">
               <p style="margin:0 0 8px; font-size:32px;">🍌</p>
-              <h1 style="margin:0; font-size:24px; font-weight:700; color:${BRAND_YELLOW}; letter-spacing:-0.02em;">Banana Quest</h1>
+              <h1 style="margin:0; font-size:24px; font-weight:700; color:${BRAND_YELLOW}; letter-spacing:-0.02em;">Banana Challenge Arena</h1>
               <p style="margin:8px 0 0; font-size:14px; color:${TEXT_MUTED};">Play smart. Score big.</p>
             </td>
           </tr>
@@ -100,7 +100,7 @@ function buildGameOTPEmail(otp, type) {
           </tr>
           <tr>
             <td style="padding:20px 32px; text-align:center; border-top:1px solid rgba(230,184,0,0.1);">
-              <p style="margin:0; font-size:12px; color:${TEXT_MUTED};">— Banana Quest Team</p>
+              <p style="margin:0; font-size:12px; color:${TEXT_MUTED};">— Banana Challenge Arena Team</p>
             </td>
           </tr>
         </table>

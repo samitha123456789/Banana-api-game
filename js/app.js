@@ -1,5 +1,5 @@
 /**
- * Banana Quest — Game UI & State
+ * Banana Challenge Arena — Game UI & State
  * Handles: login, signup, profile, home, play, end; achievements; leaderboard.
  */
 
@@ -7,15 +7,19 @@
   'use strict';
 
   const STORAGE_KEY_USER = 'bananaQuestUser';
-
+  const STORAGE_KEY_GAME = 'bananaQuestGame';
 
   // ========== CONFIG ==========
   const ROUNDS_PER_GAME = 5;
   const TIME_EASY = 90;
   const TIME_MEDIUM = 60;
   const TIME_HARD = 30;
-  const POINTS_CORRECT = 100;
-  const POINTS_BONUS_PER_SECOND = 2; // bonus for fast answer
+  const POINTS_EASY = 100;
+  const POINTS_MEDIUM = 150;
+  const POINTS_HARD = 200;
+  const BONUS_PER_SEC_EASY = 2;
+  const BONUS_PER_SEC_MEDIUM = 3;
+  const BONUS_PER_SEC_HARD = 5;
 
   // ========== API HELPERS (cookie-based auth; credentials: 'include' sends cookies) ==========
   function jsonHeaders() {
@@ -137,6 +141,30 @@
     return data;
   }
 
+  async function apiUpdateUsername(newUsername) {
+    var currentUsername = (user && user.username) || '';
+    if (!currentUsername) throw new Error('Not logged in.');
+    var url = '/api/users/' + encodeURIComponent(currentUsername);
+    var opts = {
+      method: 'PUT',
+      credentials: 'include',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ username: newUsername.trim().toLowerCase() })
+    };
+    var res = await fetch(url, opts);
+    if (res.status === 401) {
+      var refreshed = await apiRefresh();
+      if (refreshed) Object.assign(user, refreshed);
+      try { localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user)); } catch (e) {}
+      res = await fetch(url, opts);
+    }
+    var data = await res.json().catch(function () { return {}; });
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to update username.');
+    }
+    return data;
+  }
+
   async function apiGetLeaderboard() {
     var res = await fetch('/api/leaderboard', { credentials: 'include' });
     var data = await res.json().catch(function () { return []; });
@@ -146,10 +174,14 @@
     return data;
   }
 
+  const RETRIES_EASY = 6;
+  const RETRIES_MEDIUM = 4;
+  const RETRIES_HARD = 2;
+
   const DIFFICULTY_CONFIG = {
-    easy: { label: 'Easy', time: TIME_EASY, class: 'easy' },
-    medium: { label: 'Medium', time: TIME_MEDIUM, class: 'medium' },
-    hard: { label: 'Hard', time: TIME_HARD, class: 'hard' }
+    easy:   { label: 'Easy',   time: TIME_EASY,   class: 'easy',   retries: RETRIES_EASY,   pointsBase: POINTS_EASY,   bonusPerSecond: BONUS_PER_SEC_EASY },
+    medium: { label: 'Medium', time: TIME_MEDIUM, class: 'medium', retries: RETRIES_MEDIUM, pointsBase: POINTS_MEDIUM, bonusPerSecond: BONUS_PER_SEC_MEDIUM },
+    hard:   { label: 'Hard',   time: TIME_HARD,   class: 'hard',   retries: RETRIES_HARD,   pointsBase: POINTS_HARD,   bonusPerSecond: BONUS_PER_SEC_HARD }
   };
 
   // Achievements: id, name, description, icon. Unlocked by levels / score / wins.
@@ -190,6 +222,8 @@
     achievements: []
   };
 
+  var lastGameWasNewBest = false;
+
   let gameState = {
     difficulty: null,
     roundTime: 0,
@@ -198,14 +232,18 @@
     score: 0,
     correctCount: 0,
     timeLeft: 0,
+    roundStartedAt: null,
     timerId: null,
     questions: [],
     selectedAnswerIndex: null,
-    answered: false
+    answered: false,
+    lives: 0,
+    maxLives: 6
   };
 
   // ========== DOM REFS ==========
   const screens = {
+    splash: document.getElementById('screen-splash'),
     login: document.getElementById('screen-login'),
     profile: document.getElementById('screen-profile'),
     home: document.getElementById('screen-home'),
@@ -243,6 +281,12 @@
     profileWinrate: document.getElementById('profile-winrate'),
     profileAchievementsCount: document.getElementById('profile-achievements-count'),
     profileAchievements: document.getElementById('profile-achievements'),
+    editUsernameModal: document.getElementById('edit-username-modal'),
+    editUsernameInput: document.getElementById('edit-username-input'),
+    editUsernameError: document.getElementById('edit-username-error'),
+    formEditUsername: document.getElementById('form-edit-username'),
+    btnEditUsernameCancel: document.getElementById('btn-edit-username-cancel'),
+    btnEditUsernameSave: document.getElementById('btn-edit-username-save'),
     homeUsername: document.getElementById('home-username'),
     homeScore: document.getElementById('home-score'),
     homeBest: document.getElementById('home-best'),
@@ -255,9 +299,19 @@
     timerDisplay: document.getElementById('timer-display'),
     playScore: document.getElementById('play-score'),
     playDifficulty: document.getElementById('play-difficulty'),
+    livesWrap: document.getElementById('lives-wrap'),
+    livesFill: document.getElementById('lives-fill'),
+    livesText: document.getElementById('lives-text'),
+    questionCardWrapper: document.getElementById('question-card-wrapper'),
+    questionCard: document.getElementById('question-card'),
+    questionCardCrack: document.getElementById('question-card-crack'),
     questionText: document.getElementById('question-text'),
     answersContainer: document.getElementById('answers-container'),
     btnSubmitAnswer: document.getElementById('btn-submit-answer'),
+    feedbackFloating: document.getElementById('feedback-floating'),
+    correctBadge: document.getElementById('correct-badge'),
+    confettiContainer: document.getElementById('confetti-container'),
+    screenFlash: document.getElementById('screen-flash'),
     feedbackToast: document.getElementById('feedback-toast'),
     endIcon: document.getElementById('end-icon'),
     endTitle: document.getElementById('end-title'),
@@ -294,6 +348,7 @@
 
   async function handleLogout() {
     apiLogout().catch(function () {});
+    clearGameState();
     user = { username: '', email: '', totalGames: 0, highScore: 0, wins: 0, achievements: [] };
     try { localStorage.removeItem(STORAGE_KEY_USER); } catch (e) {}
     showScreen('login');
@@ -491,6 +546,63 @@
     renderProfileAchievements();
   }
 
+  function showEditUsernameModal() {
+    if (!user.username) return;
+    if (elements.editUsernameModal) elements.editUsernameModal.classList.remove('hidden');
+    if (elements.editUsernameModal) elements.editUsernameModal.setAttribute('aria-hidden', 'false');
+    if (elements.editUsernameInput) {
+      elements.editUsernameInput.value = user.username;
+      elements.editUsernameInput.focus();
+    }
+    if (elements.editUsernameError) elements.editUsernameError.textContent = '';
+  }
+
+  function hideEditUsernameModal() {
+    if (elements.editUsernameModal) elements.editUsernameModal.classList.add('hidden');
+    if (elements.editUsernameModal) elements.editUsernameModal.setAttribute('aria-hidden', 'true');
+    if (elements.editUsernameError) elements.editUsernameError.textContent = '';
+  }
+
+  async function handleEditUsernameSubmit(e) {
+    e.preventDefault();
+    var newUsername = (elements.editUsernameInput && elements.editUsernameInput.value || '').trim().toLowerCase();
+    if (!newUsername || newUsername.length < 2) {
+      if (elements.editUsernameError) elements.editUsernameError.textContent = 'Username must be at least 2 characters.';
+      return;
+    }
+    if (newUsername === user.username) {
+      hideEditUsernameModal();
+      return;
+    }
+    setButtonLoading(elements.btnEditUsernameSave, true);
+    if (elements.editUsernameError) elements.editUsernameError.textContent = '';
+    try {
+      var updated = await apiUpdateUsername(newUsername);
+      applyUserPayload(updated);
+      saveCurrentUserToRegistry();
+      try {
+        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify({
+          username: user.username,
+          email: user.email,
+          highScore: user.highScore,
+          totalGames: user.totalGames,
+          wins: user.wins,
+          achievements: user.achievements || []
+        }));
+      } catch (err) {}
+      updateProfileUI();
+      updateHomeUI();
+      renderLeaderboard();
+      hideEditUsernameModal();
+    } catch (err) {
+      if (elements.editUsernameError) {
+        elements.editUsernameError.textContent = err.message || 'Failed to update username.';
+      }
+    } finally {
+      setButtonLoading(elements.btnEditUsernameSave, false);
+    }
+  }
+
   function updateHomeUI() {
     elements.homeUsername.textContent = user.username;
     elements.homeScore.textContent = gameState.score;
@@ -587,6 +699,91 @@
       });
   }
 
+  // ========== GAME STATE PERSISTENCE (survive refresh) ==========
+  function saveGameState() {
+    if (!gameState.difficulty || !gameState.questions || gameState.questions.length === 0) return;
+    try {
+      var payload = {
+        difficulty: gameState.difficulty,
+        currentRound: gameState.currentRound,
+        totalRounds: gameState.totalRounds,
+        score: gameState.score,
+        correctCount: gameState.correctCount,
+        lives: gameState.lives,
+        maxLives: gameState.maxLives,
+        roundTime: gameState.roundTime,
+        roundStartedAt: gameState.roundStartedAt,
+        questions: gameState.questions
+      };
+      sessionStorage.setItem(STORAGE_KEY_GAME, JSON.stringify(payload));
+    } catch (e) {}
+  }
+
+  function clearGameState() {
+    try {
+      sessionStorage.removeItem(STORAGE_KEY_GAME);
+    } catch (e) {}
+  }
+
+  function tryRestoreGame() {
+    if (!user || !user.username) return false;
+    try {
+      var raw = sessionStorage.getItem(STORAGE_KEY_GAME);
+      if (!raw) return false;
+      var data = JSON.parse(raw);
+      if (!data || !data.difficulty || data.currentRound >= data.totalRounds || !data.questions || !data.questions.length) {
+        clearGameState();
+        return false;
+      }
+      gameState.difficulty = data.difficulty;
+      gameState.currentRound = data.currentRound;
+      gameState.totalRounds = data.totalRounds;
+      gameState.score = data.score || 0;
+      gameState.correctCount = data.correctCount || 0;
+      gameState.lives = data.lives != null ? data.lives : data.maxLives;
+      gameState.maxLives = data.maxLives || 6;
+      gameState.roundTime = data.roundTime || DIFFICULTY_CONFIG[data.difficulty].time;
+      gameState.questions = data.questions;
+      gameState.answered = false;
+      gameState.selectedAnswerIndex = null;
+      gameState.roundStartedAt = data.roundStartedAt || Date.now();
+      var elapsed = (Date.now() - gameState.roundStartedAt) / 1000;
+      gameState.timeLeft = Math.max(0, Math.ceil(gameState.roundTime - elapsed));
+      return true;
+    } catch (e) {
+      clearGameState();
+      return false;
+    }
+  }
+
+  function restoreRound() {
+    var round = gameState.currentRound;
+    var total = gameState.totalRounds;
+    var q = gameState.questions[round];
+    var config = DIFFICULTY_CONFIG[gameState.difficulty];
+
+    elements.roundNumber.textContent = round + 1;
+    elements.roundTotal.textContent = total;
+    elements.playScore.textContent = gameState.score;
+    updateLivesUI();
+    elements.playDifficulty.textContent = config.label;
+    elements.playDifficulty.className = 'difficulty-badge ' + config.class;
+
+    elements.questionCard.classList.remove('card-correct', 'card-wrong');
+    if (elements.questionCardCrack) elements.questionCardCrack.classList.remove('show');
+    if (elements.questionCardWrapper) elements.questionCardWrapper.classList.remove('slide-out', 'slide-in');
+    if (elements.confettiContainer) elements.confettiContainer.innerHTML = '';
+    if (elements.correctBadge) elements.correctBadge.classList.remove('show');
+    if (elements.feedbackFloating) elements.feedbackFloating.textContent = '';
+
+    elements.questionText.textContent = q.question;
+    renderAnswers(q.answers);
+    elements.btnSubmitAnswer.disabled = true;
+
+    startTimer();
+    saveGameState();
+  }
+
   // ========== DIFFICULTY & START GAME ==========
   function selectDifficulty(difficulty) {
     gameState.difficulty = difficulty;
@@ -606,6 +803,8 @@
     gameState.totalRounds = ROUNDS_PER_GAME;
     gameState.score = 0;
     gameState.correctCount = 0;
+    gameState.maxLives = config.retries || 6;
+    gameState.lives = gameState.maxLives;
     gameState.questions = MOCK_QUESTIONS.slice(0, ROUNDS_PER_GAME);
 
     user.totalGames += 1;
@@ -616,12 +815,14 @@
 
     showScreen('play');
     runRound();
+    saveGameState();
   }
 
   // ========== ROUND & TIMER ==========
   function runRound() {
     gameState.answered = false;
     gameState.selectedAnswerIndex = null;
+    gameState.lives = gameState.maxLives;
 
     var round = gameState.currentRound;
     var total = gameState.totalRounds;
@@ -630,17 +831,34 @@
     elements.roundNumber.textContent = round + 1;
     elements.roundTotal.textContent = total;
     elements.playScore.textContent = gameState.score;
+    updateLivesUI();
 
     var config = DIFFICULTY_CONFIG[gameState.difficulty];
     elements.playDifficulty.textContent = config.label;
     elements.playDifficulty.className = 'difficulty-badge ' + config.class;
+
+    elements.questionCard.classList.remove('card-correct', 'card-wrong');
+    elements.questionCardCrack.classList.remove('show');
+    if (elements.questionCardWrapper) elements.questionCardWrapper.classList.remove('slide-out', 'slide-in');
+    if (elements.confettiContainer) elements.confettiContainer.innerHTML = '';
+    if (elements.correctBadge) elements.correctBadge.classList.remove('show');
+    if (elements.feedbackFloating) elements.feedbackFloating.textContent = '';
 
     elements.questionText.textContent = q.question;
     renderAnswers(q.answers);
     elements.btnSubmitAnswer.disabled = true;
 
     gameState.timeLeft = gameState.roundTime;
+    gameState.roundStartedAt = Date.now();
     startTimer();
+    saveGameState();
+  }
+
+  function updateLivesUI() {
+    if (!elements.livesFill || !elements.livesText) return;
+    var pct = gameState.maxLives ? (gameState.lives / gameState.maxLives) * 100 : 100;
+    elements.livesFill.style.width = pct + '%';
+    elements.livesText.textContent = gameState.lives;
   }
 
   function renderAnswers(answers) {
@@ -714,7 +932,102 @@
     gameState.answered = true;
     showFeedback(false, 'Time\'s up!');
     highlightCorrectAnswer();
-    scheduleNextRound();
+    scheduleNextRound(0);
+  }
+
+  // ========== SOUND (soft success / error) ==========
+  function playSuccessSound() {
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 523;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.2);
+    } catch (e) {}
+  }
+
+  function playErrorSound() {
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 180;
+      osc.type = 'sawtooth';
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.15);
+    } catch (e) {}
+  }
+
+  // ========== ANIMATIONS ==========
+  function showFloatingText(text, type) {
+    if (!elements.feedbackFloating) return;
+    elements.feedbackFloating.textContent = text;
+    elements.feedbackFloating.className = 'feedback-floating show float-' + (type || 'score');
+    clearTimeout(elements.feedbackFloating._floatTimeout);
+    elements.feedbackFloating._floatTimeout = setTimeout(function () {
+      elements.feedbackFloating.classList.remove('show');
+    }, 1200);
+  }
+
+  function showCorrectBadge() {
+    if (!elements.correctBadge) return;
+    elements.correctBadge.classList.add('show');
+    setTimeout(function () {
+      elements.correctBadge.classList.remove('show');
+    }, 800);
+  }
+
+  function confettiBurst() {
+    if (!elements.confettiContainer) return;
+    elements.confettiContainer.innerHTML = '';
+    var colors = ['#ffd464', '#ffe066', '#f5c842', '#ffec8b', '#ffd700'];
+    for (var i = 0; i < 24; i++) {
+      var p = document.createElement('div');
+      p.className = 'confetti-particle';
+      p.style.setProperty('--angle', (i * 15) + 'deg');
+      p.style.setProperty('--delay', (i * 0.02) + 's');
+      p.style.backgroundColor = colors[i % colors.length];
+      elements.confettiContainer.appendChild(p);
+    }
+    elements.confettiContainer.classList.add('burst');
+    setTimeout(function () {
+      elements.confettiContainer.classList.remove('burst');
+      elements.confettiContainer.innerHTML = '';
+    }, 1200);
+  }
+
+  function playCorrectAnimation(points) {
+    elements.questionCard.classList.add('card-correct');
+    elements.playScore.classList.add('score-pop');
+    setTimeout(function () { elements.playScore.classList.remove('score-pop'); }, 500);
+    showFloatingText('+' + points, 'score');
+    showCorrectBadge();
+    confettiBurst();
+    playSuccessSound();
+    showFeedback(true, '+ ' + points + ' points!');
+  }
+
+  function playWrongAnimation() {
+    elements.questionCard.classList.add('card-wrong');
+    if (elements.questionCardCrack) elements.questionCardCrack.classList.add('show');
+    if (elements.screenFlash) {
+      elements.screenFlash.classList.add('show');
+      setTimeout(function () { elements.screenFlash.classList.remove('show'); }, 300);
+    }
+    showFloatingText('-1 Life', 'life');
+    updateLivesUI();
+    playErrorSound();
+    showFeedback(false, 'Wrong answer');
   }
 
   // ========== SUBMISSION & SCORE ==========
@@ -726,21 +1039,46 @@
 
     var q = gameState.questions[gameState.currentRound];
     var correct = gameState.selectedAnswerIndex === q.correct;
-    var bonus = gameState.timeLeft * POINTS_BONUS_PER_SECOND;
-    var points = correct ? (POINTS_CORRECT + bonus) : 0;
+    var config = DIFFICULTY_CONFIG[gameState.difficulty];
+    var basePoints = (config && config.pointsBase) || 100;
+    var bonusPerSec = (config && config.bonusPerSecond) || 2;
+    var bonus = gameState.timeLeft * bonusPerSec;
+    var points = correct ? (basePoints + bonus) : 0;
 
-    gameState.score += points;
-    if (correct) gameState.correctCount += 1;
-    if (correct && gameState.difficulty === 'hard' && gameState.timeLeft >= 30) {
-      grantAchievement('speed_demon');
+    if (correct) {
+      gameState.score += points;
+      gameState.correctCount += 1;
+      if (gameState.difficulty === 'hard' && gameState.timeLeft >= 30) {
+        grantAchievement('speed_demon');
+      }
+      elements.playScore.textContent = gameState.score;
+      saveGameState();
+      playCorrectAnimation(points);
+      highlightCorrectAnswer();
+      scheduleNextRound(200);
+    } else {
+      gameState.lives -= 1;
+      saveGameState();
+      playWrongAnimation();
+      highlightCorrectAnswer();
+      highlightWrongAnswer(gameState.selectedAnswerIndex);
+      if (gameState.lives <= 0) {
+        scheduleNextRound(0);
+      } else {
+        gameState.answered = false;
+        elements.answersContainer.querySelectorAll('.answer-option').forEach(function (el) {
+          el.classList.remove('correct', 'wrong', 'selected');
+          if (el.querySelector('input')) el.querySelector('input').checked = false;
+        });
+        gameState.selectedAnswerIndex = null;
+        elements.btnSubmitAnswer.disabled = true;
+        setTimeout(function () {
+          if (elements.questionCardCrack) elements.questionCardCrack.classList.remove('show');
+          elements.questionCard.classList.remove('card-wrong');
+          startTimer();
+        }, 450);
+      }
     }
-
-    elements.playScore.textContent = gameState.score;
-    showFeedback(correct, correct ? '+ ' + points + ' points!' : 'Wrong answer');
-    highlightCorrectAnswer();
-    if (!correct) highlightWrongAnswer(gameState.selectedAnswerIndex);
-
-    scheduleNextRound();
   }
 
   function highlightCorrectAnswer() {
@@ -762,23 +1100,70 @@
     }, 2000);
   }
 
-  function scheduleNextRound() {
+  function setRoundContent() {
+    var round = gameState.currentRound;
+    var total = gameState.totalRounds;
+    var q = gameState.questions[round];
+    elements.roundNumber.textContent = round + 1;
+    elements.roundTotal.textContent = total;
+    elements.playScore.textContent = gameState.score;
+    elements.questionText.textContent = q.question;
+    renderAnswers(q.answers);
+    updateLivesUI();
+    elements.questionCard.classList.remove('card-correct', 'card-wrong');
+    if (elements.questionCardCrack) elements.questionCardCrack.classList.remove('show');
+    if (elements.questionCardWrapper) elements.questionCardWrapper.classList.remove('slide-in', 'ready');
+  }
+
+  function scheduleNextRound(delayAfterCorrect) {
     elements.btnSubmitAnswer.disabled = true;
+    var delay = typeof delayAfterCorrect === 'number' ? delayAfterCorrect : 0;
     setTimeout(function () {
-      gameState.currentRound += 1;
-      if (gameState.currentRound >= gameState.totalRounds) {
-        endGame();
-      } else {
-        runRound();
-      }
-    }, 2200);
+      var wrapper = elements.questionCardWrapper;
+      if (wrapper) wrapper.classList.add('slide-out');
+      setTimeout(function () {
+        gameState.currentRound += 1;
+        if (gameState.currentRound >= gameState.totalRounds) {
+          if (wrapper) wrapper.classList.remove('slide-out');
+          endGame();
+          return;
+        }
+        gameState.answered = false;
+        gameState.selectedAnswerIndex = null;
+        gameState.lives = gameState.maxLives;
+        if (wrapper) {
+          wrapper.classList.remove('slide-out');
+          wrapper.classList.add('slide-in');
+        }
+        setRoundContent();
+        if (wrapper) {
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              wrapper.classList.add('ready');
+            });
+          });
+          setTimeout(function () {
+            wrapper.classList.remove('slide-in', 'ready');
+            elements.btnSubmitAnswer.disabled = true;
+            gameState.timeLeft = gameState.roundTime;
+            gameState.roundStartedAt = Date.now();
+            startTimer();
+            saveGameState();
+          }, 420);
+        } else {
+          runRound();
+        }
+      }, 420);
+    }, delay + 400);
   }
 
   // ========== END GAME ==========
   function endGame() {
     stopTimer();
+    clearGameState();
     if (gameState.score > user.highScore) {
       user.highScore = gameState.score;
+      lastGameWasNewBest = true;
     }
     if (gameState.correctCount === gameState.totalRounds) user.wins += 1;
     var newAchievements = checkAchievements();
@@ -804,17 +1189,38 @@
   }
 
   function handleBackHome() {
+    clearGameState();
     updateProfileUI();
     updateHomeUI();
     showScreen('home');
     document.querySelectorAll('.nav-btn').forEach(function (b) {
       b.classList.toggle('active', b.getAttribute('data-screen') === 'home');
     });
+    if (lastGameWasNewBest) {
+      playNewBestAnimation();
+      lastGameWasNewBest = false;
+    }
+  }
+
+  function playNewBestAnimation() {
+    var wrap = document.getElementById('home-best-wrap');
+    if (!wrap) return;
+    wrap.classList.add('new-best-celebrate');
+    var badge = document.getElementById('new-best-badge');
+    if (badge) {
+      badge.setAttribute('aria-hidden', 'false');
+    }
+    setTimeout(function () {
+      wrap.classList.remove('new-best-celebrate');
+      if (badge) {
+        badge.setAttribute('aria-hidden', 'true');
+      }
+    }, 2500);
   }
 
   // ========== INIT ==========
   function loadStoredUser() {
-    apiMe()
+    return apiMe()
       .then(function (me) {
         if (!me) return;
         applyUserPayload(me);
@@ -840,8 +1246,25 @@
   }
 
   function init() {
-    loadStoredUser();
     showAuthForm('login');
+    loadStoredUser().then(function () {
+      if (user && user.username && tryRestoreGame()) {
+        showScreen('play');
+        restoreRound();
+      }
+    });
+
+    var btnSplashEnter = document.getElementById('btn-splash-enter');
+    if (btnSplashEnter) {
+      btnSplashEnter.addEventListener('click', function () {
+        if (user && user.username) {
+          showScreen('home');
+        } else {
+          showScreen('login');
+        }
+      });
+    }
+
     document.getElementById('btn-show-signup').addEventListener('click', function () {
       showAuthForm('signup');
       if (elements.signupError) elements.signupError.textContent = '';
@@ -865,6 +1288,17 @@
     elements.btnBackHome.addEventListener('click', handleBackHome);
 
     bindNavButtons();
+
+    var btnEditProfile = document.getElementById('btn-edit-profile');
+    if (btnEditProfile) {
+      btnEditProfile.addEventListener('click', showEditUsernameModal);
+    }
+    if (elements.formEditUsername) {
+      elements.formEditUsername.addEventListener('submit', handleEditUsernameSubmit);
+    }
+    if (elements.btnEditUsernameCancel) {
+      elements.btnEditUsernameCancel.addEventListener('click', hideEditUsernameModal);
+    }
   }
 
   if (document.readyState === 'loading') {
