@@ -514,7 +514,7 @@ app.get('/api/users/:username', requireAuth, async (req, res) => {
   }
 });
 
-// Update a user's game stats and achievements (requires auth, own profile only)
+// Update a user's profile: username and/or game stats (requires auth, own profile only)
 app.put('/api/users/:username', requireAuth, async (req, res) => {
   try {
     const usernameParam = (req.params.username || '').toLowerCase();
@@ -526,7 +526,35 @@ app.put('/api/users/:username', requireAuth, async (req, res) => {
     }
 
     const body = req.body || {};
+    const db = await connectToDatabase();
+    const users = db.collection('users');
 
+    // Username change: validate, update doc, re-issue tokens
+    const newUsername = typeof body.username === 'string' ? body.username.trim().toLowerCase() : '';
+    if (newUsername && newUsername !== usernameParam) {
+      if (newUsername.length < 2) {
+        return res.status(400).json({ error: 'Username must be at least 2 characters.' });
+      }
+      const existing = await users.findOne({ username: newUsername });
+      if (existing) {
+        return res.status(409).json({ error: 'That username is already taken.' });
+      }
+      const updateResult = await users.updateOne(
+        { username: usernameParam },
+        { $set: { username: newUsername } }
+      );
+      if (updateResult.matchedCount === 0) {
+        return res.status(404).json({ error: 'User not found.' });
+      }
+      const refreshTokens = db.collection('refresh_tokens');
+      await refreshTokens.deleteMany({ username: usernameParam });
+      const tokens = await issueTokens(db, newUsername);
+      setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+      const userDoc = await users.findOne({ username: newUsername });
+      return res.json(toUserPayload(userDoc));
+    }
+
+    // Stats/achievements update (existing behaviour)
     const updateFields = {
       highScore: body.highScore ?? 0,
       totalGames: body.totalGames ?? 0,
@@ -534,9 +562,6 @@ app.put('/api/users/:username', requireAuth, async (req, res) => {
       achievements: Array.isArray(body.achievements) ? body.achievements : []
     };
     if (body.email !== undefined) updateFields.email = body.email;
-
-    const db = await connectToDatabase();
-    const users = db.collection('users');
 
     const result = await users.updateOne(
       { username: usernameParam },
@@ -585,6 +610,6 @@ app.listen(PORT, async () => {
   } catch (err) {
     console.error('Failed to connect to MongoDB on startup:', err);
   }
-  console.log(`Banana Quest server running at http://localhost:${PORT}`);
+  console.log(`Banana Challenge Arena server running at http://localhost:${PORT}`);
   console.log('API routes: /api/health, /api/me, /api/signup/send-otp, /api/signup/verify-otp, /api/login, ...');
 });
