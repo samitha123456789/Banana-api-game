@@ -174,6 +174,81 @@
     return data;
   }
 
+  // Fetch a fresh Banana puzzle from the backend proxy.
+  async function apiBananaQuestion() {
+    var res = await fetch('/api/banana-question', { credentials: 'include' });
+    var data = await res.json().catch(function () { return null; });
+    if (!res.ok || !data) {
+      throw new Error((data && data.error) || 'Failed to load banana puzzle.');
+    }
+    return data;
+  }
+
+  // Utility: shuffle an array (Fisher–Yates).
+  function shuffleArray(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = a[i];
+      a[i] = a[j];
+      a[j] = tmp;
+    }
+    return a;
+  }
+
+  // Build multiple-choice answers around the numeric Banana solution.
+  function buildChoicesFromSolution(solution) {
+    var correct = Number(solution);
+    if (!isFinite(correct)) {
+      correct = parseInt(solution, 10) || 0;
+    }
+    var answers = [correct];
+    var deltas = [-3, -2, -1, 1, 2, 3, 4, 5];
+    for (var i = 0; i < deltas.length && answers.length < 4; i++) {
+      var candidate = correct + deltas[i];
+      if (candidate >= 0 && answers.indexOf(candidate) === -1) {
+        answers.push(candidate);
+      }
+    }
+    var step = 1;
+    while (answers.length < 4) {
+      var up = correct + step;
+      if (answers.indexOf(up) === -1) answers.push(up);
+      if (answers.length >= 4) break;
+      var down = correct - step;
+      if (down >= 0 && answers.indexOf(down) === -1) answers.push(down);
+      step += 1;
+    }
+    answers = shuffleArray(answers);
+    var correctIndex = answers.indexOf(correct);
+    return {
+      answers: answers.map(function (n) { return String(n); }),
+      correctIndex: correctIndex < 0 ? 0 : correctIndex
+    };
+  }
+
+  // Load N Banana puzzles and convert them into internal question objects.
+  async function loadBananaQuestions(count) {
+    var out = [];
+    for (var i = 0; i < count; i++) {
+      try {
+        var data = await apiBananaQuestion();
+        var choices = buildChoicesFromSolution(data.solution);
+        out.push({
+          question: 'Solve the banana puzzle',
+          imageUrl: data.question,
+          answers: choices.answers,
+          correct: choices.correctIndex,
+          solution: data.solution
+        });
+      } catch (err) {
+        console.error('Failed to fetch banana puzzle', err);
+        break;
+      }
+    }
+    return out;
+  }
+
   const RETRIES_EASY = 6;
   const RETRIES_MEDIUM = 4;
   const RETRIES_HARD = 2;
@@ -306,6 +381,7 @@
     questionCard: document.getElementById('question-card'),
     questionCardCrack: document.getElementById('question-card-crack'),
     questionText: document.getElementById('question-text'),
+    questionMedia: document.getElementById('question-media'),
     answersContainer: document.getElementById('answers-container'),
     btnSubmitAnswer: document.getElementById('btn-submit-answer'),
     feedbackFloating: document.getElementById('feedback-floating'),
@@ -776,8 +852,7 @@
     if (elements.correctBadge) elements.correctBadge.classList.remove('show');
     if (elements.feedbackFloating) elements.feedbackFloating.textContent = '';
 
-    elements.questionText.textContent = q.question;
-    renderAnswers(q.answers);
+    renderQuestionContent(q);
     elements.btnSubmitAnswer.disabled = true;
 
     startTimer();
@@ -794,7 +869,7 @@
     elements.btnStartGame.textContent = 'Start game';
   }
 
-  function startGame() {
+  async function startGame() {
     if (!gameState.difficulty) return;
 
     var config = DIFFICULTY_CONFIG[gameState.difficulty];
@@ -805,17 +880,34 @@
     gameState.correctCount = 0;
     gameState.maxLives = config.retries || 6;
     gameState.lives = gameState.maxLives;
-    gameState.questions = MOCK_QUESTIONS.slice(0, ROUNDS_PER_GAME);
 
-    user.totalGames += 1;
-    saveCurrentUserToRegistry();
+    elements.btnStartGame.disabled = true;
+    elements.btnStartGame.textContent = 'Loading Banana puzzles...';
+
     try {
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
-    } catch (err) {}
+      var questions = await loadBananaQuestions(ROUNDS_PER_GAME);
+      if (!questions || !questions.length) {
+        throw new Error('No puzzles loaded.');
+      }
+      gameState.questions = questions;
+      gameState.totalRounds = questions.length;
 
-    showScreen('play');
-    runRound();
-    saveGameState();
+      user.totalGames += 1;
+      saveCurrentUserToRegistry();
+      try {
+        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+      } catch (errStore) {}
+
+      showScreen('play');
+      runRound();
+      saveGameState();
+    } catch (err) {
+      console.error('Failed to start game with Banana API', err);
+      window.alert('Unable to load Banana puzzles right now. Please try again.');
+    } finally {
+      elements.btnStartGame.disabled = false;
+      elements.btnStartGame.textContent = 'Start game';
+    }
   }
 
   // ========== ROUND & TIMER ==========
@@ -844,8 +936,7 @@
     if (elements.correctBadge) elements.correctBadge.classList.remove('show');
     if (elements.feedbackFloating) elements.feedbackFloating.textContent = '';
 
-    elements.questionText.textContent = q.question;
-    renderAnswers(q.answers);
+    renderQuestionContent(q);
     elements.btnSubmitAnswer.disabled = true;
 
     gameState.timeLeft = gameState.roundTime;
@@ -884,6 +975,21 @@
         elements.btnSubmitAnswer.disabled = false;
       });
     });
+  }
+
+  function renderQuestionContent(q) {
+    elements.questionText.textContent = q && q.question ? q.question : 'Solve the banana puzzle';
+    if (elements.questionMedia) {
+      elements.questionMedia.innerHTML = '';
+      if (q && q.imageUrl) {
+        var img = document.createElement('img');
+        img.src = q.imageUrl;
+        img.alt = 'Banana puzzle';
+        img.className = 'question-image';
+        elements.questionMedia.appendChild(img);
+      }
+    }
+    renderAnswers((q && q.answers) || []);
   }
 
   function escapeHtml(text) {
@@ -1107,8 +1213,7 @@
     elements.roundNumber.textContent = round + 1;
     elements.roundTotal.textContent = total;
     elements.playScore.textContent = gameState.score;
-    elements.questionText.textContent = q.question;
-    renderAnswers(q.answers);
+    renderQuestionContent(q);
     updateLivesUI();
     elements.questionCard.classList.remove('card-correct', 'card-wrong');
     if (elements.questionCardCrack) elements.questionCardCrack.classList.remove('show');

@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
+const https = require('https');
 const { connectToDatabase } = require('./db');
 const jwt = require('jsonwebtoken');
 const {
@@ -79,6 +80,34 @@ app.get('/api/databases', async (req, res) => {
     console.error('Failed to list databases:', err);
     res.status(500).json({ error: 'Failed to list databases' });
   }
+});
+
+// Fetch a fresh Banana puzzle (proxy to external Banana Game API)
+app.get('/api/banana-question', async (req, res) => {
+  const apiUrl = process.env.BANANA_API_URL ;
+
+  https.get(apiUrl, (apiRes) => {
+    let raw = '';
+    apiRes.on('data', (chunk) => {
+      raw += chunk;
+    });
+    apiRes.on('end', () => {
+      try {
+        const data = JSON.parse(raw);
+        // Expect { question: <imageUrl>, solution: <number> }
+        if (!data || !data.question || typeof data.solution === 'undefined') {
+          return res.status(502).json({ error: 'Unexpected response from Banana API.' });
+        }
+        res.json(data);
+      } catch (err) {
+        console.error('Banana API parse error:', err);
+        res.status(502).json({ error: 'Failed to parse Banana API response.' });
+      }
+    });
+  }).on('error', (err) => {
+    console.error('Banana API request failed:', err);
+    res.status(502).json({ error: 'Failed to reach Banana API.' });
+  });
 });
 
 // ========== AUTH & USER STORAGE (MongoDB-backed) ==========
