@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Banana Challenge Arena</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="admin-page">
+  <div id="admin-app">
+    <header class="admin-header">
+      <span class="admin-logo">🍌 Admin Panel</span>
+      <nav class="admin-nav">
+        <button type="button" class="admin-tab active" data-tab="dashboard">Dashboard</button>
+        <button type="button" class="admin-tab" data-tab="users">Users</button>
+        <button type="button" class="admin-tab" data-tab="game">Game Settings</button>
+        <a href="/" class="admin-nav-link">Back to Game</a>
+        <button type="button" class="btn btn-secondary btn-sm" id="admin-logout">Log out</button>
+      </nav>
+    </header>
+
+    <main class="admin-main">
+      <!-- Dashboard -->
+      <section id="tab-dashboard" class="admin-tab-panel active">
+        <h1 class="admin-title">Dashboard</h1>
+        <div class="admin-stats-grid" id="admin-stats">
+          <div class="admin-stat card">
+            <span class="admin-stat-value" id="stat-users">—</span>
+            <span class="admin-stat-label">Total users</span>
+          </div>
+          <div class="admin-stat card">
+            <span class="admin-stat-value" id="stat-banned">—</span>
+            <span class="admin-stat-label">Banned</span>
+          </div>
+          <div class="admin-stat card">
+            <span class="admin-stat-value" id="stat-games">—</span>
+            <span class="admin-stat-label">Total games played</span>
+          </div>
+          <div class="admin-stat card">
+            <span class="admin-stat-value" id="stat-wins">—</span>
+            <span class="admin-stat-label">Total wins</span>
+          </div>
+          <div class="admin-stat card">
+            <span class="admin-stat-value" id="stat-topscore">—</span>
+            <span class="admin-stat-label">Top score</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Users -->
+      <section id="tab-users" class="admin-tab-panel">
+        <h1 class="admin-title">Manage Users</h1>
+        <div class="admin-users-toolbar">
+          <input type="search" id="users-search" placeholder="Search by username or email" class="admin-search">
+        </div>
+        <div class="admin-table-wrap card">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Email</th>
+                <th>High score</th>
+                <th>Games</th>
+                <th>Wins</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <!-- Filled by JS -->
+            </tbody>
+          </table>
+        </div>
+        <!-- Delete confirmation modal -->
+        <div id="admin-confirm-modal" class="modal-overlay hidden" aria-hidden="true">
+          <div class="modal-card card admin-modal">
+            <h2>Confirm delete</h2>
+            <p id="admin-confirm-message" class="admin-confirm-message"></p>
+            <div class="modal-actions">
+              <button type="button" class="btn btn-secondary" id="admin-confirm-cancel">Cancel</button>
+              <button type="button" class="btn btn-danger" id="admin-confirm-delete">Delete</button>
+            </div>
+          </div>
+        </div>
+        <!-- User detail modal -->
+        <div id="user-modal" class="modal-overlay hidden" aria-hidden="true">
+          <div class="modal-card card admin-modal">
+            <h2 id="user-modal-title">User</h2>
+            <div id="user-modal-body"><!-- Filled by JS --></div>
+            <div class="modal-actions">
+              <button type="button" class="btn btn-secondary" id="user-modal-close">Close</button>
+              <button type="button" class="btn btn-danger" id="user-modal-ban" style="display:none">Ban user</button>
+              <button type="button" class="btn btn-primary" id="user-modal-unban" style="display:none">Unban user</button>
+              <button type="button" class="btn btn-danger" id="user-modal-delete" style="display:none">Delete user</button>
+              <button type="button" class="btn btn-primary" id="user-modal-save" style="display:none">Save changes</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Game settings -->
+      <section id="tab-game" class="admin-tab-panel">
+        <h1 class="admin-title">Game Settings</h1>
+        <p class="admin-hint">Configure rounds, time per round, and retries for each difficulty. Changes apply to all new games.</p>
+        <form id="game-config-form" class="admin-game-form">
+          <div class="admin-difficulty-grid">
+            <div class="admin-diff-card card" data-diff="easy">
+              <h3>Easy</h3>
+              <div class="input-group">
+                <label>Rounds</label>
+                <input type="number" name="easy.rounds" min="1" max="50" value="5">
+              </div>
+              <div class="input-group">
+                <label>Time per round (seconds)</label>
+                <input type="number" name="easy.time" min="5" max="300" value="90">
+              </div>
+              <div class="input-group">
+                <label>Retries (lives)</label>
+                <input type="number" name="easy.retries" min="1" max="20" value="6">
+              </div>
+              <div class="input-group">
+                <label>Base points</label>
+                <input type="number" name="easy.pointsBase" min="0" value="100">
+              </div>
+              <div class="input-group">
+                <label>Bonus per second left</label>
+                <input type="number" name="easy.bonusPerSecond" min="0" step="0.5" value="2">
+              </div>
+            </div>
+            <div class="admin-diff-card card" data-diff="medium">
+              <h3>Medium</h3>
+              <div class="input-group">
+                <label>Rounds</label>
+                <input type="number" name="medium.rounds" min="1" max="50" value="10">
+              </div>
+              <div class="input-group">
+                <label>Time per round (seconds)</label>
+                <input type="number" name="medium.time" min="5" max="300" value="60">
+              </div>
+              <div class="input-group">
+                <label>Retries (lives)</label>
+                <input type="number" name="medium.retries" min="1" max="20" value="4">
+              </div>
+              <div class="input-group">
+                <label>Base points</label>
+                <input type="number" name="medium.pointsBase" min="0" value="150">
+              </div>
+              <div class="input-group">
+                <label>Bonus per second left</label>
+                <input type="number" name="medium.bonusPerSecond" min="0" step="0.5" value="3">
+              </div>
+            </div>
+            <div class="admin-diff-card card" data-diff="hard">
+              <h3>Hard</h3>
+              <div class="input-group">
+                <label>Rounds</label>
+                <input type="number" name="hard.rounds" min="1" max="50" value="15">
+              </div>
+              <div class="input-group">
+                <label>Time per round (seconds)</label>
+                <input type="number" name="hard.time" min="5" max="300" value="30">
+              </div>
+              <div class="input-group">
+                <label>Retries (lives)</label>
+                <input type="number" name="hard.retries" min="1" max="20" value="2">
+              </div>
+              <div class="input-group">
+                <label>Base points</label>
+                <input type="number" name="hard.pointsBase" min="0" value="200">
+              </div>
+              <div class="input-group">
+                <label>Bonus per second left</label>
+                <input type="number" name="hard.bonusPerSecond" min="0" step="0.5" value="5">
+              </div>
+            </div>
+          </div>
+          <p class="form-error" id="game-config-error" aria-live="polite"></p>
+          <button type="submit" class="btn btn-primary btn-lg" id="game-config-save">Save game settings</button>
+        </form>
+      </section>
+    </main>
+
+    <div id="admin-loading" class="admin-loading">
+      <p>Checking access…</p>
+    </div>
+    <div id="admin-denied" class="admin-denied hidden">
+      <p>Access denied. Admin only.</p>
+      <a href="/" class="btn btn-primary">Go to game</a>
+    </div>
+
+    <div id="admin-notifications" class="admin-notifications" aria-live="polite"></div>
+  </div>
+  <script src="/js/admin.js"></script>
+</body>
+</html>

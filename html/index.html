@@ -88,7 +88,14 @@
             </div>
             <div class="input-group">
               <label for="signup-password">Password</label>
-              <input type="password" id="signup-password" placeholder="At least 6 characters" required autocomplete="new-password" minlength="6">
+              <input type="password" id="signup-password" placeholder="Create a strong password" required autocomplete="new-password" minlength="8">
+              <div id="signup-password-requirements" class="password-requirements" aria-live="polite">
+                <span class="password-req" data-req="length" id="pw-req-length">At least 8 characters</span>
+                <span class="password-req" data-req="uppercase" id="pw-req-upper">One uppercase letter</span>
+                <span class="password-req" data-req="lowercase" id="pw-req-lower">One lowercase letter</span>
+                <span class="password-req" data-req="number" id="pw-req-number">One number</span>
+                <span class="password-req" data-req="symbol" id="pw-req-symbol">One symbol (!@#$%^&* etc.)</span>
+              </div>
             </div>
             <div class="input-group">
               <label for="signup-confirm">Confirm password</label>
@@ -129,6 +136,7 @@
         <nav>
           <button type="button" class="nav-btn" data-screen="home">Home</button>
           <button type="button" class="nav-btn active" data-screen="profile">Profile</button>
+          <a href="/admin.html" class="nav-btn nav-link" id="nav-admin-panel" style="display:none">Admin</a>
           <button type="button" class="nav-btn" id="btn-logout">Log out</button>
         </nav>
       </header>
@@ -207,6 +215,7 @@
         <nav>
           <button type="button" class="nav-btn active" data-screen="home">Home</button>
           <button type="button" class="nav-btn" data-screen="profile">Profile</button>
+          <a href="/admin.html" class="nav-btn nav-link" id="nav-admin-panel-2" style="display:none">Admin</a>
           <button type="button" class="nav-btn" id="btn-logout-2">Log out</button>
         </nav>
       </header>

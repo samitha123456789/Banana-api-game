@@ -1,0 +1,333 @@
+/* Admin panel overrides and layout */
+.admin-page {
+  background: var(--bg-dark, #0d0f14);
+  min-height: 100vh;
+}
+
+.admin-page .admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  background: var(--bg-card, #151922);
+  border-bottom: 1px solid var(--border, rgba(255,212,100,0.15));
+}
+
+.admin-logo {
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--accent, #ffd464);
+}
+
+.admin-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.admin-tab {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm, 10px);
+  cursor: pointer;
+  font: inherit;
+}
+
+.admin-tab:hover {
+  background: var(--bg-elevated);
+  border-color: var(--accent-dim);
+}
+
+.admin-tab.active {
+  background: var(--accent);
+  color: var(--bg-dark);
+  border-color: var(--accent);
+}
+
+.admin-nav-link {
+  color: var(--accent);
+  text-decoration: none;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.admin-nav-link:hover {
+  text-decoration: underline;
+}
+
+.admin-main {
+  padding: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.admin-tab-panel {
+  display: none;
+}
+
+.admin-tab-panel.active {
+  display: block;
+}
+
+.admin-title {
+  font-size: 1.5rem;
+  margin: 0 0 1rem;
+  color: var(--text);
+}
+
+.admin-hint {
+  color: var(--text-muted);
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+}
+
+/* Dashboard stats */
+.admin-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+.admin-stat {
+  padding: 1.25rem;
+  text-align: center;
+}
+
+.admin-stat-value {
+  display: block;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.admin-stat-label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Users table */
+.admin-users-toolbar {
+  margin-bottom: 1rem;
+}
+
+.admin-search {
+  width: 100%;
+  max-width: 320px;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text);
+  font: inherit;
+}
+
+.admin-search::placeholder {
+  color: var(--text-muted);
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+  padding: 0;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-table th {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.admin-table tbody tr:hover {
+  background: var(--bg-elevated);
+}
+
+.admin-table .badge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.badge-banned {
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+.badge-admin {
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+.admin-table .btn-sm {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.85rem;
+  margin-right: 0.25rem;
+}
+
+/* User modal */
+.admin-modal {
+  max-width: 480px;
+}
+
+.admin-modal .input-group {
+  margin-bottom: 1rem;
+}
+
+/* Confirm modal must appear above user detail modal */
+#admin-confirm-modal {
+  z-index: 20;
+}
+
+.admin-confirm-message {
+  margin: 0 0 1rem;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.admin-modal .modal-actions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn-danger {
+  background: var(--error);
+  color: #fff;
+  border: none;
+}
+
+.btn-danger:hover {
+  filter: brightness(1.1);
+}
+
+/* Game settings form */
+.admin-game-form {
+  max-width: 900px;
+}
+
+.admin-difficulty-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.admin-diff-card {
+  padding: 1.25rem;
+}
+
+.admin-diff-card h3 {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  color: var(--accent);
+}
+
+.admin-diff-card .input-group {
+  margin-bottom: 0.75rem;
+}
+
+.admin-diff-card .input-group label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.admin-diff-card input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-dark);
+  color: var(--text);
+  font: inherit;
+}
+
+/* Loading / denied */
+.admin-loading,
+.admin-denied {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-dark);
+  z-index: 10;
+}
+
+.admin-loading.hidden,
+.admin-denied.hidden {
+  display: none;
+}
+
+.admin-denied p {
+  margin-bottom: 1rem;
+  color: var(--text-muted);
+}
+
+.admin-main.hidden {
+  display: none;
+}
+
+/* Notifications (toast) */
+.admin-notifications {
+  position: fixed;
+  top: 4.5rem;
+  right: 1rem;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 360px;
+  pointer-events: none;
+}
+
+.admin-notification {
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm, 10px);
+  font-size: 0.9rem;
+  box-shadow: var(--shadow, 0 8px 32px rgba(0,0,0,0.4));
+  pointer-events: auto;
+  animation: admin-notification-in 0.25s ease;
+}
+
+@keyframes admin-notification-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.admin-notification--success {
+  background: var(--success-bg, rgba(74, 222, 128, 0.12));
+  color: var(--success, #4ade80);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.admin-notification--error {
+  background: var(--error-bg, rgba(248, 113, 113, 0.12));
+  color: var(--error, #f87171);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
