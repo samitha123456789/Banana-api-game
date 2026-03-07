@@ -145,19 +145,21 @@ Create a `.env` file in the project root:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `MONGODB_URI` | ✅ | MongoDB connection string (e.g. `mongodb://localhost:27017` or Atlas URI) |
-| `MONGODB_DB_NAME` | ❌ | Database name (default: `banana`) |
+| `MONGODB_DB_NAME` | ✅ | Database name (default: `banana`) |
 | `JWT_SECRET` | ✅ | Secret for access tokens |
 | `JWT_REFRESH_SECRET` | ✅ | Secret for refresh tokens |
-| `JWT_ACCESS_EXPIRES` | ❌ | Access token expiry (e.g. `15m`) |
-| `JWT_REFRESH_EXPIRES` | ❌ | Refresh token expiry (e.g. `7d`) |
+| `JWT_ACCESS_EXPIRES` | ✅ | Access token expiry (e.g. `15m`) |
+| `JWT_REFRESH_EXPIRES` | ✅ | Refresh token expiry (e.g. `7d`) |
 | `BANANA_API_URL` | ✅ | Full URL to the Banana puzzle API (must return `{ question, solution }`) |
-| `PORT` | ❌ | Server port (default: `3000`) |
-| `NODE_ENV` | ❌ | `production` for secure cookies |
-| `SMTP_HOST` | ❌ | SMTP server for OTP emails |
-| `SMTP_PORT` | ❌ | e.g. `587` or `465` |
-| `SMTP_USER` | ❌ | SMTP username |
-| `SMTP_PASSWORD` | ❌ | SMTP password |
-| `SMTP_FROM_EMAIL` | ❌ | From address (defaults to `SMTP_USER`) |
+| `PORT` | ✅ | Server port (default: `3000`) |
+| `NODE_ENV` | ✅ | `production` for secure cookies |
+| `SMTP_HOST` | ✅ | SMTP server for OTP emails |
+| `SMTP_PORT` | ✅ | e.g. `587` or `465` |
+| `SMTP_USER` | ✅ | SMTP username |
+| `SMTP_PASSWORD` | ✅ | SMTP password |
+| `SMTP_FROM_EMAIL` | ✅ | From address (defaults to `SMTP_USER`) |
+| `ADMIN_EMAIL` | ✅ | Admin login email (e.g. `admin@gmail.com`); creates/ensures admin user on startup |
+| `ADMIN_PASSWORD` | ✅ | Admin login password (e.g. `Admin@123`); store in `.env` only, never commit |
 
 **Minimal `.env` (game + auth; no email):**
 
@@ -167,9 +169,13 @@ JWT_SECRET=your-access-secret-min-32-chars
 JWT_REFRESH_SECRET=your-refresh-secret-diff-from-above
 BANANA_API_URL=https://your-banana-api.example/puzzle
 PORT=3000
+ADMIN_EMAIL=admin@gmail.com
+ADMIN_PASSWORD=Admin@123
 ```
 
 Without SMTP, signup OTP and forgot-password emails will fail (API returns 503); you can still use the legacy signup route if available, or test with login only.
+
+**Admin panel:** If `ADMIN_EMAIL` and `ADMIN_PASSWORD` are set, the server ensures an admin user exists. Log in with those credentials on the main app, then open **Admin** in the nav or go to **http://localhost:3000/admin.html** to manage users (view, edit, ban) and game settings (rounds, time, retries per difficulty).
 
 ### 3. Run
 

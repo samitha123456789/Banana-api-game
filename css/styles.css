@@ -536,6 +536,57 @@ body::-webkit-scrollbar {
   min-height: 1.25em;
 }
 
+/* Password strength requirements (signup) */
+.password-requirements {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.password-req {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  opacity: 0.85;
+  transform: translateX(0);
+  transition: color 0.35s ease, opacity 0.35s ease, transform 0.3s ease;
+}
+
+.password-req::before {
+  content: '○';
+  display: inline-block;
+  width: 1.25em;
+  margin-right: 0.35rem;
+  font-size: 0.75em;
+  vertical-align: middle;
+  transition: content 0.25s ease, color 0.3s ease;
+}
+
+.password-req.met {
+  color: var(--success);
+  opacity: 1;
+  animation: password-req-met 0.4s ease;
+}
+
+.password-req.met::before {
+  content: '✓';
+  color: var(--success);
+}
+
+@keyframes password-req-met {
+  0% {
+    transform: translateX(-4px);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translateX(2px);
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
 /* ========== CARDS ========== */
 .card {
   background: var(--bg-card);

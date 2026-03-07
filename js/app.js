@@ -9,7 +9,7 @@
   const STORAGE_KEY_USER = 'bananaQuestUser';
   const STORAGE_KEY_GAME = 'bananaQuestGame';
 
-  // ========== CONFIG ==========
+  // ========== CONFIG (defaults; can be overridden by /api/game-config) ==========
   const ROUNDS_EASY = 5;
   const ROUNDS_MEDIUM = 10;
   const ROUNDS_HARD = 15;
@@ -255,11 +255,35 @@
   const RETRIES_MEDIUM = 4;
   const RETRIES_HARD = 2;
 
-  const DIFFICULTY_CONFIG = {
+  let DIFFICULTY_CONFIG = {
     easy:   { label: 'Easy',   time: TIME_EASY,   class: 'easy',   retries: RETRIES_EASY,   pointsBase: POINTS_EASY,   bonusPerSecond: BONUS_PER_SEC_EASY,   rounds: ROUNDS_EASY },
     medium: { label: 'Medium', time: TIME_MEDIUM, class: 'medium', retries: RETRIES_MEDIUM, pointsBase: POINTS_MEDIUM, bonusPerSecond: BONUS_PER_SEC_MEDIUM, rounds: ROUNDS_MEDIUM },
     hard:   { label: 'Hard',   time: TIME_HARD,   class: 'hard',   retries: RETRIES_HARD,   pointsBase: POINTS_HARD,   bonusPerSecond: BONUS_PER_SEC_HARD,   rounds: ROUNDS_HARD }
   };
+
+  async function loadGameConfig() {
+    try {
+      var res = await fetch('/api/game-config', { credentials: 'include' });
+      if (!res.ok) return;
+      var data = await res.json();
+      if (data.easy) DIFFICULTY_CONFIG.easy = { ...DIFFICULTY_CONFIG.easy, ...data.easy };
+      if (data.medium) DIFFICULTY_CONFIG.medium = { ...DIFFICULTY_CONFIG.medium, ...data.medium };
+      if (data.hard) DIFFICULTY_CONFIG.hard = { ...DIFFICULTY_CONFIG.hard, ...data.hard };
+      updateDifficultyCardsFromConfig();
+    } catch (e) {}
+  }
+
+  function updateDifficultyCardsFromConfig() {
+    document.querySelectorAll('.difficulty-card').forEach(function (card) {
+      var d = card.getAttribute('data-difficulty');
+      if (!d || !DIFFICULTY_CONFIG[d]) return;
+      var c = DIFFICULTY_CONFIG[d];
+      var timeEl = card.querySelector('.difficulty-time');
+      if (timeEl) timeEl.textContent = c.time + 's per round';
+      var h3 = card.querySelector('h3');
+      if (h3) h3.textContent = c.label;
+    });
+  }
 
   // Achievements: id, name, description, icon. Unlocked by levels / score / wins.
   const ACHIEVEMENTS = [
@@ -472,6 +496,51 @@
     btn.classList.toggle('loading', loading);
   }
 
+  // ========== PASSWORD STRENGTH (signup) ==========
+  function validateStrongPassword(pwd) {
+    if (!pwd || pwd.length < 8) {
+      return { valid: false, message: 'Password must be at least 8 characters and include uppercase, lowercase, a number, and a symbol.' };
+    }
+    if (!/[A-Z]/.test(pwd)) {
+      return { valid: false, message: 'Password must include at least one uppercase letter.' };
+    }
+    if (!/[a-z]/.test(pwd)) {
+      return { valid: false, message: 'Password must include at least one lowercase letter.' };
+    }
+    if (!/[0-9]/.test(pwd)) {
+      return { valid: false, message: 'Password must include at least one number.' };
+    }
+    if (!/[^A-Za-z0-9]/.test(pwd)) {
+      return { valid: false, message: 'Password must include at least one symbol (e.g. !@#$%^&*).' };
+    }
+    return { valid: true };
+  }
+
+  function updatePasswordRequirements(pwd) {
+    var container = document.getElementById('signup-password-requirements');
+    if (!container) return;
+    var len = (pwd || '').length >= 8;
+    var upper = /[A-Z]/.test(pwd || '');
+    var lower = /[a-z]/.test(pwd || '');
+    var num = /[0-9]/.test(pwd || '');
+    var sym = /[^A-Za-z0-9]/.test(pwd || '');
+    var reqs = {
+      length: len,
+      uppercase: upper,
+      lowercase: lower,
+      number: num,
+      symbol: sym
+    };
+    container.querySelectorAll('.password-req').forEach(function (el) {
+      var key = el.getAttribute('data-req');
+      if (reqs[key]) {
+        el.classList.add('met');
+      } else {
+        el.classList.remove('met');
+      }
+    });
+  }
+
   // ========== SIGNUP (step 1: send OTP → step 2: verify OTP) ==========
   async function handleSignupSubmit(e) {
     e.preventDefault();
@@ -529,8 +598,9 @@
       if (elements.signupError) elements.signupError.textContent = 'Email is required.';
       return;
     }
-    if (password.length < 6) {
-      if (elements.signupError) elements.signupError.textContent = 'Password must be at least 6 characters.';
+    var strong = validateStrongPassword(password);
+    if (!strong.valid) {
+      if (elements.signupError) elements.signupError.textContent = strong.message;
       return;
     }
     if (password !== confirm) {
@@ -571,11 +641,13 @@
         totalGames: loggedIn.totalGames || 0,
         highScore: loggedIn.highScore || 0,
         wins: loggedIn.wins || 0,
-        achievements: loggedIn.achievements || []
+        achievements: loggedIn.achievements || [],
+        isAdmin: !!loggedIn.isAdmin
       };
       saveCurrentUserToRegistry();
       updateProfileUI();
       updateHomeUI();
+      updateAdminLink();
       renderLeaderboard();
       showScreen('home');
       bindNavButtons();
@@ -588,6 +660,14 @@
     }
   }
 
+  function updateAdminLink() {
+    var show = !!(user && user.isAdmin);
+    ['nav-admin-panel', 'nav-admin-panel-2'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = show ? '' : 'none';
+    });
+  }
+
   function applyUserPayload(payload) {
     if (!payload) return;
     user.username = payload.username;
@@ -596,6 +676,7 @@
     user.highScore = payload.highScore || 0;
     user.wins = payload.wins || 0;
     user.achievements = Array.isArray(payload.achievements) ? payload.achievements : [];
+    if (payload.hasOwnProperty('isAdmin')) user.isAdmin = !!payload.isAdmin;
   }
 
   function getProfileLevelAndXp() {
@@ -685,6 +766,8 @@
   }
 
   function updateHomeUI() {
+    loadGameConfig();
+    updateAdminLink();
     elements.homeUsername.textContent = user.username;
     elements.homeScore.textContent = gameState.score;
     elements.homeBest.textContent = user.highScore;
@@ -1433,6 +1516,14 @@
     });
     elements.formLogin.addEventListener('submit', handleLoginSubmit);
     elements.formSignup.addEventListener('submit', handleSignupSubmit);
+    if (elements.signupPassword) {
+      elements.signupPassword.addEventListener('input', function () {
+        updatePasswordRequirements(elements.signupPassword.value);
+      });
+      elements.signupPassword.addEventListener('focus', function () {
+        updatePasswordRequirements(elements.signupPassword.value);
+      });
+    }
 
     elements.difficultyCards.forEach(function (card) {
       card.addEventListener('click', function () {
