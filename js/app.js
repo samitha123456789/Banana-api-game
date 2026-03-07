@@ -10,7 +10,9 @@
   const STORAGE_KEY_GAME = 'bananaQuestGame';
 
   // ========== CONFIG ==========
-  const ROUNDS_PER_GAME = 5;
+  const ROUNDS_EASY = 5;
+  const ROUNDS_MEDIUM = 10;
+  const ROUNDS_HARD = 15;
   const TIME_EASY = 90;
   const TIME_MEDIUM = 60;
   const TIME_HARD = 30;
@@ -254,9 +256,9 @@
   const RETRIES_HARD = 2;
 
   const DIFFICULTY_CONFIG = {
-    easy:   { label: 'Easy',   time: TIME_EASY,   class: 'easy',   retries: RETRIES_EASY,   pointsBase: POINTS_EASY,   bonusPerSecond: BONUS_PER_SEC_EASY },
-    medium: { label: 'Medium', time: TIME_MEDIUM, class: 'medium', retries: RETRIES_MEDIUM, pointsBase: POINTS_MEDIUM, bonusPerSecond: BONUS_PER_SEC_MEDIUM },
-    hard:   { label: 'Hard',   time: TIME_HARD,   class: 'hard',   retries: RETRIES_HARD,   pointsBase: POINTS_HARD,   bonusPerSecond: BONUS_PER_SEC_HARD }
+    easy:   { label: 'Easy',   time: TIME_EASY,   class: 'easy',   retries: RETRIES_EASY,   pointsBase: POINTS_EASY,   bonusPerSecond: BONUS_PER_SEC_EASY,   rounds: ROUNDS_EASY },
+    medium: { label: 'Medium', time: TIME_MEDIUM, class: 'medium', retries: RETRIES_MEDIUM, pointsBase: POINTS_MEDIUM, bonusPerSecond: BONUS_PER_SEC_MEDIUM, rounds: ROUNDS_MEDIUM },
+    hard:   { label: 'Hard',   time: TIME_HARD,   class: 'hard',   retries: RETRIES_HARD,   pointsBase: POINTS_HARD,   bonusPerSecond: BONUS_PER_SEC_HARD,   rounds: ROUNDS_HARD }
   };
 
   // Achievements: id, name, description, icon. Unlocked by levels / score / wins.
@@ -266,7 +268,7 @@
     { id: 'level_2', name: 'Getting Warm', description: 'Complete 2 rounds in one game', icon: '2️⃣' },
     { id: 'level_3', name: 'Halfway There', description: 'Complete 3 rounds in one game', icon: '3️⃣' },
     { id: 'level_4', name: 'Almost There', description: 'Complete 4 rounds in one game', icon: '4️⃣' },
-    { id: 'level_5', name: 'Full Run', description: 'Complete all 5 rounds', icon: '5️⃣' },
+    { id: 'level_5', name: 'Full Run', description: 'Complete all rounds in a game', icon: '5️⃣' },
     { id: 'first_win', name: 'First Win', description: 'Get every question right in a game', icon: '🏆' },
     { id: 'perfect_easy', name: 'Easy Master', description: 'Perfect score on Easy', icon: '🌱' },
     { id: 'perfect_medium', name: 'Medium Master', description: 'Perfect score on Medium', icon: '⚡' },
@@ -303,7 +305,7 @@
     difficulty: null,
     roundTime: 0,
     currentRound: 0,
-    totalRounds: ROUNDS_PER_GAME,
+    totalRounds: ROUNDS_EASY,
     score: 0,
     correctCount: 0,
     timeLeft: 0,
@@ -396,7 +398,10 @@
     endCorrect: document.getElementById('end-correct'),
     endRounds: document.getElementById('end-rounds'),
     btnPlayAgain: document.getElementById('btn-play-again'),
-    btnBackHome: document.getElementById('btn-back-home')
+    btnBackHome: document.getElementById('btn-back-home'),
+    btnHomeFromPlay: document.getElementById('btn-home-from-play'),
+    btnResumeGame: document.getElementById('btn-resume-game'),
+    btnEndGame: document.getElementById('btn-end-game')
   };
 
   // ========== SCREEN NAVIGATION ==========
@@ -684,6 +689,23 @@
     elements.homeScore.textContent = gameState.score;
     elements.homeBest.textContent = user.highScore;
     renderLeaderboard();
+    if (elements.btnResumeGame) {
+      var hasGame = hasSavedGame();
+      elements.btnResumeGame.classList.toggle('hidden', !hasGame);
+      if (elements.btnEndGame) elements.btnEndGame.classList.toggle('hidden', !hasGame);
+      elements.btnStartGame.textContent = hasGame ? 'Start new game' : 'Select a difficulty to start';
+    }
+  }
+
+  function handleEndGame() {
+    clearGameState();
+    updateHomeUI();
+    document.querySelectorAll('.difficulty-card').forEach(function (card) {
+      card.classList.remove('selected');
+    });
+    gameState.difficulty = null;
+    elements.btnStartGame.disabled = true;
+    elements.btnStartGame.textContent = 'Select a difficulty to start';
   }
 
   // ========== ACHIEVEMENTS ==========
@@ -713,7 +735,7 @@
     if (gameState.currentRound >= 2) grant('level_2');
     if (gameState.currentRound >= 3) grant('level_3');
     if (gameState.currentRound >= 4) grant('level_4');
-    if (gameState.currentRound >= gameState.totalRounds && gameState.totalRounds >= 5) grant('level_5');
+    if (gameState.currentRound >= gameState.totalRounds) grant('level_5');
     if (gameState.correctCount === gameState.totalRounds) {
       grant('first_win');
       if (gameState.difficulty === 'easy') grant('perfect_easy');
@@ -801,6 +823,17 @@
     } catch (e) {}
   }
 
+  function hasSavedGame() {
+    try {
+      var raw = sessionStorage.getItem(STORAGE_KEY_GAME);
+      if (!raw) return false;
+      var data = JSON.parse(raw);
+      return !!(data && data.difficulty && data.currentRound < data.totalRounds && data.questions && data.questions.length);
+    } catch (e) {
+      return false;
+    }
+  }
+
   function tryRestoreGame() {
     if (!user || !user.username) return false;
     try {
@@ -871,11 +904,13 @@
 
   async function startGame() {
     if (!gameState.difficulty) return;
+    clearGameState();
 
     var config = DIFFICULTY_CONFIG[gameState.difficulty];
+    var roundsCount = config.rounds || ROUNDS_EASY;
     gameState.roundTime = config.time;
     gameState.currentRound = 0;
-    gameState.totalRounds = ROUNDS_PER_GAME;
+    gameState.totalRounds = roundsCount;
     gameState.score = 0;
     gameState.correctCount = 0;
     gameState.maxLives = config.retries || 6;
@@ -885,7 +920,7 @@
     elements.btnStartGame.textContent = 'Loading Banana puzzles...';
 
     try {
-      var questions = await loadBananaQuestions(ROUNDS_PER_GAME);
+      var questions = await loadBananaQuestions(roundsCount);
       if (!questions || !questions.length) {
         throw new Error('No puzzles loaded.');
       }
@@ -914,7 +949,7 @@
   function runRound() {
     gameState.answered = false;
     gameState.selectedAnswerIndex = null;
-    gameState.lives = gameState.maxLives;
+    /* lives carry over; do not reset per round */
 
     var round = gameState.currentRound;
     var total = gameState.totalRounds;
@@ -1169,7 +1204,9 @@
       highlightCorrectAnswer();
       highlightWrongAnswer(gameState.selectedAnswerIndex);
       if (gameState.lives <= 0) {
-        scheduleNextRound(0);
+        setTimeout(function () {
+          endGame();
+        }, 1200);
       } else {
         gameState.answered = false;
         elements.answersContainer.querySelectorAll('.answer-option').forEach(function (el) {
@@ -1235,7 +1272,7 @@
         }
         gameState.answered = false;
         gameState.selectedAnswerIndex = null;
-        gameState.lives = gameState.maxLives;
+        /* lives carry over; do not reset */
         if (wrapper) {
           wrapper.classList.remove('slide-out');
           wrapper.classList.add('slide-in');
@@ -1305,6 +1342,22 @@
       playNewBestAnimation();
       lastGameWasNewBest = false;
     }
+  }
+
+  function handleGoHomeFromPlay() {
+    stopTimer();
+    saveGameState();
+    updateHomeUI();
+    showScreen('home');
+    document.querySelectorAll('.nav-btn').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-screen') === 'home');
+    });
+  }
+
+  function handleResumeGame() {
+    if (!hasSavedGame() || !tryRestoreGame()) return;
+    showScreen('play');
+    restoreRound();
   }
 
   function playNewBestAnimation() {
@@ -1391,6 +1444,9 @@
     elements.btnSubmitAnswer.addEventListener('click', handleSubmitAnswer);
     elements.btnPlayAgain.addEventListener('click', handlePlayAgain);
     elements.btnBackHome.addEventListener('click', handleBackHome);
+    if (elements.btnHomeFromPlay) elements.btnHomeFromPlay.addEventListener('click', handleGoHomeFromPlay);
+    if (elements.btnResumeGame) elements.btnResumeGame.addEventListener('click', handleResumeGame);
+    if (elements.btnEndGame) elements.btnEndGame.addEventListener('click', handleEndGame);
 
     bindNavButtons();
 

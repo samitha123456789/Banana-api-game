@@ -252,9 +252,17 @@
             <!-- Filled by JS -->
           </div>
         </div>
-        <button type="button" class="btn btn-primary btn-lg btn-start" id="btn-start-game" disabled>
-          Select a difficulty to start
-        </button>
+        <div class="home-play-actions" id="home-play-actions">
+          <button type="button" class="btn btn-primary btn-lg btn-resume-game hidden" id="btn-resume-game">
+            Resume game
+          </button>
+          <button type="button" class="btn btn-lg btn-end-game hidden" id="btn-end-game">
+            End game
+          </button>
+          <button type="button" class="btn btn-primary btn-lg btn-start" id="btn-start-game" disabled>
+            Select a difficulty to start
+          </button>
+        </div>
       </div>
     </section>
 
@@ -263,6 +271,7 @@
       <div class="screen-bg game-bg"></div>
       <header class="game-header">
         <div class="game-header-left">
+          <button type="button" class="btn btn-icon btn-home-from-play" id="btn-home-from-play" title="Back to home (game will be saved)">Home</button>
           <span class="game-logo">🍌</span>
           <span class="round-badge">Round <span id="round-number">1</span> of <span id="round-total">5</span></span>
         </div>
