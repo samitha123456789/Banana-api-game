@@ -87,7 +87,7 @@ app.get('/api/databases', async (req, res) => {
 
 // Fetch a fresh Banana puzzle (proxy to external Banana Game API)
 app.get('/api/banana-question', async (req, res) => {
-  const apiUrl = process.env.BANANA_API_URL ;
+  const apiUrl = process.env.BANANA_API_URL;
 
   https.get(apiUrl, (apiRes) => {
     let raw = '';
@@ -110,6 +110,36 @@ app.get('/api/banana-question', async (req, res) => {
   }).on('error', (err) => {
     console.error('Banana API request failed:', err);
     res.status(502).json({ error: 'Failed to reach Banana API.' });
+  });
+});
+
+// Fetch a fresh Tomato puzzle (proxy to external Tomato API)
+// Default URL points to the public Tomato puzzle API documented at:
+// https://marcconrad.com/uob/tomato/api.php
+app.get('/api/tomato-question', async (req, res) => {
+  const apiUrl = process.env.TOMATO_API_URL || 'https://marcconrad.com/uob/tomato/api.php';
+
+  https.get(apiUrl, (apiRes) => {
+    let raw = '';
+    apiRes.on('data', (chunk) => {
+      raw += chunk;
+    });
+    apiRes.on('end', () => {
+      try {
+        const data = JSON.parse(raw);
+        // Expect { question: <imageUrl>, solution: <number> } similar to Banana API
+        if (!data || !data.question || typeof data.solution === 'undefined') {
+          return res.status(502).json({ error: 'Unexpected response from Tomato API.' });
+        }
+        res.json(data);
+      } catch (err) {
+        console.error('Tomato API parse error:', err);
+        res.status(502).json({ error: 'Failed to parse Tomato API response.' });
+      }
+    });
+  }).on('error', (err) => {
+    console.error('Tomato API request failed:', err);
+    res.status(502).json({ error: 'Failed to reach Tomato API.' });
   });
 });
 
