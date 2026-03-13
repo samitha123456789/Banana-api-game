@@ -186,6 +186,16 @@
     return data;
   }
 
+  // Fetch a fresh Tomato puzzle from the backend proxy.
+  async function apiTomatoQuestion() {
+    var res = await fetch('/api/tomato-question', { credentials: 'include' });
+    var data = await res.json().catch(function () { return null; });
+    if (!res.ok || !data) {
+      throw new Error((data && data.error) || 'Failed to load tomato puzzle.');
+    }
+    return data;
+  }
+
   // Utility: shuffle an array (Fisher–Yates).
   function shuffleArray(arr) {
     var a = arr.slice();
@@ -245,6 +255,37 @@
         });
       } catch (err) {
         console.error('Failed to fetch banana puzzle', err);
+        break;
+      }
+    }
+    return out;
+  }
+
+  // Load N Tomato puzzles and convert them into internal question objects.
+  // Tomato API returns a numeric solution (typically 1–4). We present fixed
+  // multiple-choice answers "1".."4" and treat solution as 1-based index.
+  async function loadTomatoQuestions(count) {
+    var out = [];
+    for (var i = 0; i < count; i++) {
+      try {
+        var data = await apiTomatoQuestion();
+        var solutionNum = Number(data.solution);
+        if (!isFinite(solutionNum)) {
+          solutionNum = parseInt(data.solution, 10) || 1;
+        }
+        // Clamp to [1,4] and convert to 0-based index for our internal model.
+        if (solutionNum < 1) solutionNum = 1;
+        if (solutionNum > 4) solutionNum = 4;
+        var correctIndex = solutionNum - 1;
+        out.push({
+          question: 'Solve the tomato puzzle',
+          imageUrl: data.question,
+          answers: ['1', '2', '3', '4'],
+          correct: correctIndex,
+          solution: data.solution
+        });
+      } catch (err) {
+        console.error('Failed to fetch tomato puzzle', err);
         break;
       }
     }
@@ -1000,13 +1041,48 @@
     gameState.lives = gameState.maxLives;
 
     elements.btnStartGame.disabled = true;
-    elements.btnStartGame.textContent = 'Loading Banana puzzles...';
+    elements.btnStartGame.textContent = 'Loading puzzles...';
 
     try {
-      var questions = await loadBananaQuestions(roundsCount);
+      var questions;
+
+      // For hard mode, alternate Banana and Tomato puzzles:
+      // index 0 -> Banana, 1 -> Tomato, 2 -> Banana, 3 -> Tomato, ...
+      if (gameState.difficulty === 'hard') {
+        var bananaCount = Math.ceil(roundsCount / 2);
+        var tomatoCount = Math.floor(roundsCount / 2);
+
+        var bananaQuestions = await loadBananaQuestions(bananaCount);
+        var tomatoQuestions = await loadTomatoQuestions(tomatoCount);
+
+        questions = [];
+        var bIndex = 0;
+        var tIndex = 0;
+
+        for (var i = 0; i < roundsCount; i++) {
+          var useBanana = i % 2 === 0;
+          if (useBanana && bIndex < bananaQuestions.length) {
+            questions.push(bananaQuestions[bIndex++]);
+          } else if (!useBanana && tIndex < tomatoQuestions.length) {
+            questions.push(tomatoQuestions[tIndex++]);
+          } else if (bIndex < bananaQuestions.length) {
+            // Fallback if one source ran out.
+            questions.push(bananaQuestions[bIndex++]);
+          } else if (tIndex < tomatoQuestions.length) {
+            questions.push(tomatoQuestions[tIndex++]);
+          } else {
+            break;
+          }
+        }
+      } else {
+        // Easy and medium use Banana puzzles only.
+        questions = await loadBananaQuestions(roundsCount);
+      }
+
       if (!questions || !questions.length) {
         throw new Error('No puzzles loaded.');
       }
+
       gameState.questions = questions;
       gameState.totalRounds = questions.length;
 
