@@ -345,15 +345,6 @@
     { id: 'speed_demon', name: 'Speed Demon', description: 'Answer with 30+ seconds left on Hard', icon: '⚡' }
   ];
 
-  // Mock questions for UI demo (replace with Banana API later)
-  const MOCK_QUESTIONS = [
-    { question: 'What is the capital of France?', answers: ['London', 'Paris', 'Berlin', 'Madrid'], correct: 1 },
-    { question: 'Which planet is known as the Red Planet?', answers: ['Venus', 'Mars', 'Jupiter', 'Saturn'], correct: 1 },
-    { question: 'How many continents are there?', answers: ['5', '6', '7', '8'], correct: 2 },
-    { question: 'What is 15 × 4?', answers: ['50', '55', '60', '65'], correct: 2 },
-    { question: 'Which element has the chemical symbol Au?', answers: ['Silver', 'Copper', 'Gold', 'Aluminum'], correct: 2 }
-  ];
-
   // ========== STATE ==========
   let user = {
     username: '',
@@ -1561,7 +1552,7 @@
         try { localStorage.removeItem(STORAGE_KEY_USER); } catch (e) {}
       });
   }
-
+ // Auto-resume in-progress game on load
   function init() {
     showAuthForm('login');
     loadStoredUser().then(function () {
@@ -1570,7 +1561,7 @@
         restoreRound();
       }
     });
-
+// splash button
     var btnSplashEnter = document.getElementById('btn-splash-enter');
     if (btnSplashEnter) {
       btnSplashEnter.addEventListener('click', function () {
@@ -1581,17 +1572,21 @@
         }
       });
     }
-
+   // switch to signup form
     document.getElementById('btn-show-signup').addEventListener('click', function () {
       showAuthForm('signup');
       if (elements.signupError) elements.signupError.textContent = '';
     });
+    // switch to login form
     document.getElementById('btn-show-login').addEventListener('click', function () {
       showAuthForm('login');
       if (elements.loginError) elements.loginError.textContent = '';
     });
+    // submit login form
     elements.formLogin.addEventListener('submit', handleLoginSubmit);
+    // submit signup form
     elements.formSignup.addEventListener('submit', handleSignupSubmit);
+    // update password requirements
     if (elements.signupPassword) {
       elements.signupPassword.addEventListener('input', function () {
         updatePasswordRequirements(elements.signupPassword.value);

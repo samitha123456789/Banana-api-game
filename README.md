@@ -15,12 +15,6 @@
 
 ---
 
-> 🎬 **Animated README** — This README uses badges, tables, and a **Mermaid flowchart** (rendered on GitHub/GitLab). Add a short gameplay GIF below for an extra animated demo!
-
-<!-- Optional: add an animated gameplay GIF here for demo
-![Gameplay](docs/gameplay.gif)
--->
-
 ## 📑 Table of Contents
 
 | # | Section |
@@ -39,6 +33,7 @@
 |----------|---------|
 | **🎮 Gameplay** | Banana math puzzles from external API — solve the puzzle, pick the right number |
 | | Three difficulties: **Easy**, **Medium**, **Hard** (rounds, time, retries, points vary) |
+| | **Hard mode mix**: alternates Banana + Tomato puzzles (Banana on odd rounds, Tomato on even rounds) |
 | | Per-round timer with visual ring; bonus points for answering quickly |
 | | **Retries (lives)** — wrong answers cost one life; game over when lives reach zero |
 | | Multiple-choice answers; correct/wrong feedback with animations and sound |
@@ -53,7 +48,7 @@
 | **🏆 Leaderboard** | Top 10 players by high score; “you” highlighted |
 | **🎨 UX** | Responsive layout (mobile-friendly); retries bar visible on small screens |
 | | Confetti, correct/wrong animations, toast feedback, optional sound |
-| **🔧 Backend** | REST API: health, auth, users, leaderboard, Banana puzzle proxy |
+| **🔧 Backend** | REST API: health, auth, users, leaderboard, Banana/Tomato puzzle proxies |
 | | MongoDB for users, refresh tokens, pending signups, password reset OTP |
 
 ---
@@ -84,6 +79,7 @@ flowchart LR
 3. **Home** → Choose **Easy**, **Medium**, or **Hard** and click **Start game**. You can also **Resume** a saved game if one exists.
 4. **Each round**:
    - A **Banana puzzle** (math grid with a missing number) is shown.
+   - On **Hard**, rounds alternate between **Banana** and **Tomato** puzzle APIs.
    - You have a **countdown** (Easy: 90s, Medium: 60s, Hard: 30s).
    - Pick one of four numeric answers and click **Submit answer**.
 5. **Correct** → You earn **base points + time bonus**; next round loads.
@@ -97,9 +93,9 @@ flowchart LR
 
 | Rule | Description |
 |------|-------------|
-| **Rounds** | Easy: 5 · Medium: 10 · Hard: 15 |
-| **Time per round** | Easy: 90s · Medium: 60s · Hard: 30s |
-| **Retries (lives)** | Easy: 6 · Medium: 4 · Hard: 2. Shared across the whole game; wrong or timeout = −1 life. |
+| **Rounds** | Easy: 5 · Medium: 10 · Hard: 15 *(admin can override via game config)* |
+| **Time per round** | Easy: 90s · Medium: 60s · Hard: 30s *(admin can override via game config)* |
+| **Retries (lives)** | Easy: 6 · Medium: 4 · Hard: 2 *(admin can override via game config)*. Shared across the whole game; wrong or timeout = −1 life. |
 | **Scoring** | Base points per correct answer (Easy 100, Medium 150, Hard 200) **+** bonus per second left (Easy +2/s, Medium +3/s, Hard +5/s). Wrong or timeout = 0 points and −1 life. |
 | **Win condition** | Answer **all** rounds correctly in one game (perfect run). |
 | **Game over** | When retries reach **0** (or when the last round ends). |
@@ -117,7 +113,7 @@ flowchart LR
 | **Database** | **MongoDB** (users, refresh_tokens, pending_signups) |
 | **Auth** | **JWT** (access + refresh), **bcryptjs** for passwords, HttpOnly cookies |
 | **Email** | **Nodemailer** (OTP for signup and password reset) |
-| **Puzzles** | External **Banana API** (HTTPS) — proxied via `/api/banana-question` |
+| **Puzzles** | External **Banana API** and **Tomato API** (HTTPS) — proxied via `/api/banana-question` and `/api/tomato-question` |
 | **Env** | **dotenv** for configuration |
 
 ---
@@ -151,6 +147,7 @@ Create a `.env` file in the project root:
 | `JWT_ACCESS_EXPIRES` | ✅ | Access token expiry (e.g. `15m`) |
 | `JWT_REFRESH_EXPIRES` | ✅ | Refresh token expiry (e.g. `7d`) |
 | `BANANA_API_URL` | ✅ | Full URL to the Banana puzzle API (must return `{ question, solution }`) |
+| `TOMATO_API_URL` | ✅ | Tomato puzzle API URL (default: `https://marcconrad.com/uob/tomato/api.php`) |
 | `PORT` | ✅ | Server port (default: `3000`) |
 | `NODE_ENV` | ✅ | `production` for secure cookies |
 | `SMTP_HOST` | ✅ | SMTP server for OTP emails |
